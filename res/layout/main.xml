@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:layout_width="fill_parent"
+	android:layout_height="fill_parent" android:orientation="vertical"
+	xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/MainWindow"
+	android:gravity="top">
+
+	<!-- first line for PSN and PTY -->
+	<LinearLayout android:layout_width="fill_parent"
+	android:layout_height="wrap_content" android:orientation="horizontal"
+	xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/TopBar"
+	android:gravity="top" android:paddingTop="20px">
+		<TextView android:layout_width="0dp" android:lines="1" android:paddingLeft="20px"
+			android:layout_height="wrap_content" android:text="@string/no_rds" android:layout_weight="1"
+			android:textSize="40px" android:id="@+id/PSNTextView" android:gravity="left"></TextView>
+		<TextView android:layout_width="wrap_content" android:lines="1" android:paddingRight="20px"
+			android:layout_height="wrap_content" android:text="@string/empty"
+			android:textSize="30px" android:id="@+id/PTYTextView" android:gravity="right"></TextView>
+	</LinearLayout>
+
+	<!-- frequency -->
+	<TextView android:layout_width="fill_parent"
+		android:layout_height="wrap_content" android:id="@+id/FrequencyTextView"
+		android:lines="1" android:textSize="160px" android:gravity="center"
+		android:text="@string/dashes"></TextView>
+
+	<!-- radio text -->
+	<TextView android:layout_width="fill_parent"
+		android:layout_height="wrap_content" android:text="@string/empty"
+		android:textSize="28px" android:id="@+id/RTTextView" android:gravity="center" 		
+		android:paddingLeft="16px" android:paddingRight="16px"
+		android:singleLine="true" android:ellipsize="marquee"
+        android:scrollHorizontally="true"></TextView>
+
+	<!-- buttons -->
+	<LinearLayout android:id="@+id/TopRow"
+		android:layout_height="wrap_content" android:layout_width="fill_parent"
+		android:gravity="center" android:paddingTop="40px">
+		<LinearLayout android:layout_width="fill_parent"
+			android:layout_height="wrap_content" android:layout_weight="1"
+			android:gravity="right" android:paddingRight="16px">
+			<Button android:layout_height="wrap_content"
+				android:layout_width="wrap_content" android:id="@+id/ScanDown"
+				android:background="@drawable/backwardbutton"/>
+		</LinearLayout>
+		<LinearLayout android:layout_width="fill_parent"
+			android:layout_height="wrap_content" android:layout_weight="1"
+			android:gravity="left" android:paddingLeft="16px">
+			<Button android:layout_height="wrap_content"
+				android:layout_width="wrap_content" android:id="@+id/ScanUp"
+				android:background="@drawable/forwardbutton" />
+		</LinearLayout>
+	</LinearLayout>
+	<LinearLayout android:id="@+id/BottonRow"
+		android:layout_height="wrap_content" android:layout_width="fill_parent"
+		android:gravity="center" android:paddingTop="16px">
+		<LinearLayout android:layout_width="fill_parent"
+			android:layout_height="wrap_content" android:layout_weight="1"
+			android:gravity="right" android:paddingRight="16px">
+			<Button android:layout_height="wrap_content"
+				android:layout_width="wrap_content" android:id="@+id/FullScan"
+				android:background="@drawable/rescanbutton"/>
+		</LinearLayout>
+		<LinearLayout android:layout_width="fill_parent"
+			android:layout_height="wrap_content" android:layout_weight="1"
+			android:gravity="left" android:paddingLeft="16px">
+			<Button android:layout_height="wrap_content"
+				android:layout_width="wrap_content" android:id="@+id/Pause"
+				android:background="@drawable/pausebutton" />
+		</LinearLayout>
+	</LinearLayout>
+</LinearLayout> 
