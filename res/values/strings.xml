@@ -11,4 +11,38 @@
 	<string name="dashes">- - - -</string>
 	<string name="no_rds">NO RDS</string>
 	<string name="no_stations">No stations saved</string>
+    <string-array name="pty_names">
+        <item>Unknown</item>
+        <item>News</item>
+        <item>Current affairs</item>
+        <item>Information</item>
+        <item>Sport</item>
+        <item>Education</item>
+        <item>Drama</item>
+        <item>Culture</item>
+        <item>Science</item>
+        <item>Varied</item>
+        <item>Pop</item>
+        <item>Rock</item>
+        <item>Easy listening</item>
+        <item>Light classical</item>
+        <item>Serious classical</item>
+        <item>Other music</item>
+        <item>Weather</item>
+        <item>Finance</item>
+        <item>Children</item>
+        <item>Social affairs</item>
+        <item>Religion</item>
+        <item>Phone In</item>
+        <item>Travel</item>
+        <item>Leisure</item>
+        <item>Jazz</item>
+        <item>Country</item>
+        <item>National</item>
+        <item>Oldies</item>
+        <item>Folk</item>
+        <item>Documentary</item>
+        <item>Alarm test</item>
+        <item>Alarm</item>
+    </string-array>
 </resources>

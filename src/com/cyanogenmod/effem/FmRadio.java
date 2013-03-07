@@ -332,41 +332,7 @@ public class FmRadio extends Activity {
     }
 
     private String getPTYName(int i) {
-        final String[] ptymap = {
-            "Unknown",
-            "News",
-            "Affairs",
-            "Info",
-            "Sport",
-            "Educate",
-            "Drama",
-            "Culture",
-            "Science",
-            "Varied",
-            "Pop",
-            "Rock",
-            "Easy Listening",
-            "Light classic",
-            "Serious classic",
-            "Other",
-            "Weather",
-            "Finance",
-            "Children",
-            "Social",
-            "Religion",
-            "Phone In",
-            "Travel",
-            "Leisure",
-            "Jazz",
-            "Country",
-            "National",
-            "Oldies",
-            "Folk",
-            "Documentary",
-            "Alarm Test",
-            "Alarm"
-        };
-        return ptymap[i];
+        return getResources().getStringArray(R.array.pty_names)[i];
     }
 
     /**
