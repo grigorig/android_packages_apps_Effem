@@ -30,7 +30,7 @@ import android.view.SubMenu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.stericsson.hardware.fm.FmBand;
@@ -175,7 +175,7 @@ public class FmRadio extends Activity {
 
             // FullScan results
             public void onFullScan(int[] frequency, int[] signalStrength, boolean aborted) {
-                ((Button) findViewById(R.id.FullScan)).setEnabled(true);
+                ((ImageButton) findViewById(R.id.FullScan)).setEnabled(true);
                 showToast("Fullscan complete", Toast.LENGTH_LONG);
                 mMenuAdapter.clear();
                 if (frequency.length == 0) {
@@ -206,8 +206,8 @@ public class FmRadio extends Activity {
                 mStationInfoTextView.setText("");
                 mStationNameTextView.setText(R.string.no_rds);
                 mProgramTypeTextView.setText("");
-                ((Button) findViewById(R.id.ScanUp)).setEnabled(true);
-                ((Button) findViewById(R.id.ScanDown)).setEnabled(true);
+                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(true);
+                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
             }
         };
         mReceiverRdsDataFoundListener = new com.stericsson.hardware.fm.FmReceiver.OnRDSDataFoundListener() {
@@ -246,10 +246,10 @@ public class FmRadio extends Activity {
 
             public void onStarted() {
                 // Activate all the buttons
-                ((Button) findViewById(R.id.ScanUp)).setEnabled(true);
-                ((Button) findViewById(R.id.ScanDown)).setEnabled(true);
-                ((Button) findViewById(R.id.Pause)).setEnabled(true);
-                ((Button) findViewById(R.id.FullScan)).setEnabled(true);
+                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(true);
+                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
+                ((ImageButton) findViewById(R.id.Pause)).setEnabled(true);
+                //((ImageButton) findViewById(R.id.FullScan)).setEnabled(true);
                 //initialBandscan();
                 startAudio();
                 if (mCurrentFrequency > 0) {
@@ -300,7 +300,6 @@ public class FmRadio extends Activity {
 
         try {
             if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED) {
-                mAudioman.setParameters("fm_off=1");
                 AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
                 mFmReceiver.reset();
                 if (mMediaPlayer != null) {
@@ -329,7 +328,6 @@ public class FmRadio extends Activity {
         editor.commit();
         try {
             if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED) {
-                mAudioman.setParameters("fm_off=1");
                 AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
                 mFmReceiver.reset();
                 if (mMediaPlayer != null) {
@@ -429,11 +427,11 @@ public class FmRadio extends Activity {
     private void setNotification(String stationName, int frequency) {
         if (stationName != null && frequency > 0) {
             mRadioNotification.setContentTitle(stationName)
-                .setContentText(formatFrequency(frequency));
+                .setContentText(formatFrequency(frequency) + " MHz");
             Notification n = mRadioNotification.build();
             mNotificationManager.notify(1, n);
         } else if (frequency > 0) {
-            mRadioNotification.setContentTitle(formatFrequency(frequency))
+            mRadioNotification.setContentTitle(formatFrequency(frequency) + " MHz")
                 .setContentText("");
             Notification n = mRadioNotification.build();
             mNotificationManager.notify(1, n);
@@ -460,10 +458,10 @@ public class FmRadio extends Activity {
             try {
                 mFmReceiver.startAsync(mFmBand);
                 // Darken the the buttons
-                ((Button) findViewById(R.id.ScanUp)).setEnabled(false);
-                ((Button) findViewById(R.id.ScanDown)).setEnabled(false);
-                ((Button) findViewById(R.id.Pause)).setEnabled(false);
-                ((Button) findViewById(R.id.FullScan)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.Pause)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.FullScan)).setEnabled(false);
                 //showToast("Scanning initial stations", Toast.LENGTH_LONG);
             } catch (IOException e) {
                 showToast("Unable to start the radio receiver.", Toast.LENGTH_LONG);
@@ -491,7 +489,6 @@ public class FmRadio extends Activity {
             // fall back to legacy audio routing
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
-            mAudioman.setParameters("fm_on=1");
         }
     }
 
@@ -509,33 +506,43 @@ public class FmRadio extends Activity {
         mProgramTypeTextView = (TextView) findViewById(R.id.PTYTextView);
         mStationInfoTextView.setSelected(true);
 
-        final Button scanUp = (Button) findViewById(R.id.ScanUp);
+        final ImageButton scanUp = (ImageButton) findViewById(R.id.ScanUp);
         scanUp.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
                 try {
+                    if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
+                        mFmReceiver.resume();
                     mFmReceiver.scanUp();
                 } catch (IllegalStateException e) {
                     showToast("Unable to ScanUp", Toast.LENGTH_LONG);
+                    return;
+                } catch (IOException e) {
+                    showToast("Unable to resume", Toast.LENGTH_LONG);
                     return;
                 }
                 scanUp.setEnabled(false);
             }
         });
-        final Button scanDown = (Button) findViewById(R.id.ScanDown);
+        final ImageButton scanDown = (ImageButton) findViewById(R.id.ScanDown);
         scanDown.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
                 try {
+                    if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
+                        mFmReceiver.resume();
                     mFmReceiver.scanDown();
                 } catch (IllegalStateException e) {
                     showToast("Unable to ScanDown", Toast.LENGTH_LONG);
+                    return;
+                } catch (IOException e) {
+                    showToast("Unable to resume", Toast.LENGTH_LONG);
                     return;
                 }
                 scanDown.setEnabled(false);
             }
         });
-        final Button pause = (Button) findViewById(R.id.Pause);
+        final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
         pause.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
@@ -545,7 +552,7 @@ public class FmRadio extends Activity {
                         mFmReceiver.resume();
                         if (mMediaPlayer != null)
                             mMediaPlayer.start();
-                        pause.setBackgroundResource(R.drawable.pausebutton);
+                        pause.setImageResource(R.drawable.pausebutton);
                         setNotification(null, mCurrentFrequency);
                     } catch (IOException e) {
                         showToast("Unable to resume", Toast.LENGTH_LONG);
@@ -560,7 +567,7 @@ public class FmRadio extends Activity {
                         if (mMediaPlayer != null)
                             mMediaPlayer.pause();
                         mFmReceiver.pause();
-                        pause.setBackgroundResource(R.drawable.playbutton);
+                        pause.setImageResource(R.drawable.playbutton);
                         mNotificationManager.cancel(1);
                     } catch (IOException e) {
                         showToast("Unable to pause", Toast.LENGTH_LONG);
@@ -575,13 +582,13 @@ public class FmRadio extends Activity {
                 }
             }
         });
-        final Button fullScan = (Button) findViewById(R.id.FullScan);
+        final ImageButton fullScan = (ImageButton) findViewById(R.id.FullScan);
         fullScan.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
                 try {
-                    fullScan.setEnabled(false);
-                    showToast("Scanning for stations", Toast.LENGTH_LONG);
+                    //fullScan.setEnabled(false);
+                    //showToast("Scanning for stations", Toast.LENGTH_LONG);
                     mFmReceiver.startFullScan();
                 } catch (IllegalStateException e) {
                     showToast("Unable to start the scan", Toast.LENGTH_LONG);
@@ -610,7 +617,8 @@ public class FmRadio extends Activity {
 
         subMenu = menu.addSubMenu(BASE_OPTION_MENU, STATION_SELECT, Menu.NONE,
                 R.string.station_select);
-        subMenu.setIcon(android.R.drawable.ic_menu_agenda);
+        subMenu.setIcon(android.R.drawable.ic_menu_more);
+        subMenu.getItem().setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 
         // Dynamically populate the station select menu each time the option
         // button is pushed
@@ -662,6 +670,7 @@ public class FmRadio extends Activity {
                 mFmBand = new FmBand(mSelectedBand);
                 try {
                     mFmReceiver.reset();
+                    mCurrentFrequency = mFmBand.getDefaultFrequency();
                 } catch (IOException e) {
                     showToast("Unable to restart the FM Radio", Toast.LENGTH_LONG);
                 }
