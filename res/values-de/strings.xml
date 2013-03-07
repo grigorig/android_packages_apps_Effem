@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="app_name">Effem</string>
+	<string name="band_select">Frequenzband wählen</string>
+	<string name="band_us">USA</string>
+	<string name="band_eu">Europa</string>
+	<string name="band_ja">Japan</string>
+	<string name="band_ch">China</string>
+	<string name="station_select">Station wählen</string>
+	<string name="fmradio">FM RADIO</string>
+	<string name="dashes">- - - -</string>
+	<string name="no_rds">NO RDS</string>
+	<string name="no_stations">Keine Stationen</string>
+	<string name="scan_error">Kann Suchlauf nicht starten</string>
+	<string name="fm_start_error">Kann Radioempfänger nicht starten</string>
+	<string name="seek_error">Kann Frequenz nicht setzen</string>
+	<string name="resume_error">Kann nicht fortsetzen</string>
+	<string name="pause_error">Kann nicht pausieren</string>
+	<string name="busy_error">Beschäftigt, bitte später versuchen</string>
+</resources>
