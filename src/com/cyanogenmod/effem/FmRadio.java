@@ -192,9 +192,9 @@ public class FmRadio extends Activity {
                         mFmReceiver.setFrequency(frequency[0]);
                         mFrequencyTextView.setText(mMenuAdapter.getItem(0).toString());
                     } catch (IOException e) {
-                        showToast("Unable to set the receiver's frequency", Toast.LENGTH_LONG);
+                        showToast(R.string.seek_error, Toast.LENGTH_LONG);
                     } catch (IllegalArgumentException e) {
-                        showToast("Unable to set the receiver's frequency", Toast.LENGTH_LONG);
+                        showToast(R.string.seek_error, Toast.LENGTH_LONG);
                     }
                 }
             }
@@ -344,7 +344,7 @@ public class FmRadio extends Activity {
                 try {
                     mFmReceiver.startFullScan();
                 } catch (IllegalStateException e) {
-                    showToast("Unable to start the scan", Toast.LENGTH_LONG);
+                    showToast(R.string.scan_error, Toast.LENGTH_LONG);
                     return;
                 }
             }
@@ -361,6 +361,10 @@ public class FmRadio extends Activity {
                 Toast.makeText(getApplicationContext(), text, duration).show();
             }
         });
+    }
+
+    private void showToast(int id, int duration) {
+        showToast(getResources().getString(id), duration);
     }
 
     /**
@@ -420,9 +424,9 @@ public class FmRadio extends Activity {
                 ((ImageButton) findViewById(R.id.FullScan)).setEnabled(false);
                 //showToast("Scanning initial stations", Toast.LENGTH_LONG);
             } catch (IOException e) {
-                showToast("Unable to start the radio receiver.", Toast.LENGTH_LONG);
+                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
             } catch (IllegalStateException e) {
-                showToast("Unable to start the radio receiver.", Toast.LENGTH_LONG);
+                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
             }
         } else {
 	        updateFrequency(mCurrentFrequency, true);
@@ -467,10 +471,10 @@ public class FmRadio extends Activity {
                 if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
                     mFmReceiver.resume();
             } catch (IllegalStateException e) {
-                showToast("Unable to seek", Toast.LENGTH_LONG);
+                showToast(R.string.seek_error, Toast.LENGTH_LONG);
                 return false;
             } catch (IOException e) {
-                showToast("Unable to resume", Toast.LENGTH_LONG);
+                showToast(R.string.seek_error, Toast.LENGTH_LONG);
                 return false;
             }
         }
@@ -527,10 +531,10 @@ public class FmRadio extends Activity {
                         mFmReceiver.resume();
                     mFmReceiver.scanUp();
                 } catch (IllegalStateException e) {
-                    showToast("Unable to ScanUp", Toast.LENGTH_LONG);
+                    showToast(R.string.scan_error, Toast.LENGTH_LONG);
                     return;
                 } catch (IOException e) {
-                    showToast("Unable to resume", Toast.LENGTH_LONG);
+                    showToast(R.string.resume_error, Toast.LENGTH_LONG);
                     return;
                 }
                 scanUp.setEnabled(false);
@@ -545,10 +549,10 @@ public class FmRadio extends Activity {
                         mFmReceiver.resume();
                     mFmReceiver.scanDown();
                 } catch (IllegalStateException e) {
-                    showToast("Unable to ScanDown", Toast.LENGTH_LONG);
+                    showToast(R.string.scan_error, Toast.LENGTH_LONG);
                     return;
                 } catch (IOException e) {
-                    showToast("Unable to resume", Toast.LENGTH_LONG);
+                    showToast(R.string.resume_error, Toast.LENGTH_LONG);
                     return;
                 }
                 scanDown.setEnabled(false);
@@ -567,9 +571,9 @@ public class FmRadio extends Activity {
                         pause.setImageResource(R.drawable.pausebutton);
                         setNotification(null, mCurrentFrequency);
                     } catch (IOException e) {
-                        showToast("Unable to resume", Toast.LENGTH_LONG);
+                        showToast(R.string.resume_error, Toast.LENGTH_LONG);
                     } catch (IllegalStateException e) {
-                        showToast("Unable to resume", Toast.LENGTH_LONG);
+                        showToast(R.string.resume_error, Toast.LENGTH_LONG);
                     }
                     mPauseMutex = false;
                 } else if (mFmReceiver.getState() == FmReceiver.STATE_STARTED
@@ -582,13 +586,13 @@ public class FmRadio extends Activity {
                         pause.setImageResource(R.drawable.playbutton);
                         mNotificationManager.cancel(1);
                     } catch (IOException e) {
-                        showToast("Unable to pause", Toast.LENGTH_LONG);
+                        showToast(R.string.pause_error, Toast.LENGTH_LONG);
                     } catch (IllegalStateException e) {
-                        showToast("Unable to pause", Toast.LENGTH_LONG);
+                        showToast(R.string.pause_error, Toast.LENGTH_LONG);
                     }
                     mPauseMutex = false;
                 } else if (mPauseMutex) {
-                    showToast("MediaPlayer busy. Please wait and try again.", Toast.LENGTH_LONG);
+                    showToast(R.string.busy_error, Toast.LENGTH_LONG);
                 } else {
                     Log.i(LOG_TAG, "No action: incorrect state - " + mFmReceiver.getState());
                 }
@@ -603,7 +607,7 @@ public class FmRadio extends Activity {
                     //showToast("Scanning for stations", Toast.LENGTH_LONG);
                     mFmReceiver.startFullScan();
                 } catch (IllegalStateException e) {
-                    showToast("Unable to start the scan", Toast.LENGTH_LONG);
+                    showToast(R.string.scan_error, Toast.LENGTH_LONG);
                 }
             }
         });
@@ -685,7 +689,7 @@ public class FmRadio extends Activity {
                     mCurrentFrequency = mFmBand.getDefaultFrequency();
                     updateFrequency(mCurrentFrequency, true);
                 } catch (IOException e) {
-                    showToast("Unable to restart the FM Radio", Toast.LENGTH_LONG);
+                    showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
                 }
                 if (mMediaPlayer != null) {
                     mMediaPlayer.release();
@@ -704,7 +708,7 @@ public class FmRadio extends Activity {
                                 getSelectStationMenuItem(item)).toString());
                     }
                 } catch (IllegalArgumentException e) {
-                    showToast("Unable to set the frequency", Toast.LENGTH_LONG);
+                    showToast(R.string.seek_error, Toast.LENGTH_LONG);
                 }
 
                 break;
