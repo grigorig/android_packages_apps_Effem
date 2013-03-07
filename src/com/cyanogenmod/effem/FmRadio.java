@@ -29,6 +29,7 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.View.OnLongClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -200,12 +201,7 @@ public class FmRadio extends Activity {
 
             // Returns the new frequency.
             public void onScan(int tunedFrequency, int signalStrength, int scanDirection, boolean aborted) {
-                mFrequencyTextView.setText(formatFrequency(tunedFrequency));
-                setNotification(null, tunedFrequency);
-                mCurrentFrequency = tunedFrequency;
-                mStationInfoTextView.setText("");
-                mStationNameTextView.setText(R.string.no_rds);
-                mProgramTypeTextView.setText("");
+                updateFrequency(tunedFrequency, false);
                 ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(true);
                 ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
             }
@@ -253,16 +249,10 @@ public class FmRadio extends Activity {
                 //initialBandscan();
                 startAudio();
                 if (mCurrentFrequency > 0) {
-                	try {
-               			mFmReceiver.setFrequency(mCurrentFrequency);
-				        mFrequencyTextView.setText(formatFrequency(mCurrentFrequency));
-				        setNotification(null, mCurrentFrequency);
-               		} catch (IOException e) {
-               			Log.e(LOG_TAG, "Failed to set frequency %d: " + e.getMessage());
-               		}
-               	} else {
-               		mFmReceiver.scanUp();
-               	}
+                    updateFrequency(mCurrentFrequency, true);
+                } else {
+                    mFmReceiver.scanUp();
+                }
             }
         };
 
@@ -469,8 +459,7 @@ public class FmRadio extends Activity {
                 showToast("Unable to start the radio receiver.", Toast.LENGTH_LONG);
             }
         } else {
-	        mFrequencyTextView.setText(formatFrequency(mCurrentFrequency));
-	        setNotification(null, mCurrentFrequency);
+	        updateFrequency(mCurrentFrequency, true);
         }
     }
 
@@ -493,13 +482,50 @@ public class FmRadio extends Activity {
     }
 
     /**
+     * Update frequency state and UI
+     *
+     * @param freq new frequency to set in KHz
+     * @param whether frequency should be set on the receiver
+     *
+     */
+    private boolean updateFrequency(int frequency, boolean setFrequency) {
+        mCurrentFrequency = frequency;
+
+        if (setFrequency == true) {
+            try {
+                // only change frequency if it's different, otherwise
+                // an audible pop can occur
+                if (mFmReceiver.getFrequency() != frequency)
+                    mFmReceiver.setFrequency(frequency);
+                // resume receiver if it is paused
+                if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
+                    mFmReceiver.resume();
+            } catch (IllegalStateException e) {
+                showToast("Unable to seek", Toast.LENGTH_LONG);
+                return false;
+            } catch (IOException e) {
+                showToast("Unable to resume", Toast.LENGTH_LONG);
+                return false;
+            }
+        }
+
+        mFrequencyTextView.setText(formatFrequency(mCurrentFrequency));
+        setNotification(null, mCurrentFrequency);
+        mStationInfoTextView.setText("");
+        mStationNameTextView.setText(R.string.no_rds);
+        mProgramTypeTextView.setText("");
+
+        return true;
+    }
+
+    /**
      * Sets up the buttons and their listeners
      */
     private void setupButtons() {
 
         mMenuAdapter = new ArrayAdapter<CharSequence>(this, android.R.layout.simple_spinner_item);
         mMenuAdapter.setDropDownViewResource(android.R.layout.simple_list_item_single_choice);
-        mMenuAdapter.add("No stations available");
+        mMenuAdapter.add(getResources().getString(R.string.no_stations));
         mFrequencyTextView = (TextView) findViewById(R.id.FrequencyTextView);
         mStationNameTextView = (TextView) findViewById(R.id.PSNTextView);
         mStationInfoTextView = (TextView) findViewById(R.id.RTTextView);
@@ -507,6 +533,26 @@ public class FmRadio extends Activity {
         mStationInfoTextView.setSelected(true);
 
         final ImageButton scanUp = (ImageButton) findViewById(R.id.ScanUp);
+        final ImageButton scanDown = (ImageButton) findViewById(R.id.ScanDown);
+        final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
+        final ImageButton fullScan = (ImageButton) findViewById(R.id.FullScan);
+
+        scanUp.setOnLongClickListener (new OnLongClickListener() {
+
+            public boolean onLongClick(View v) {
+                int newFrequency = mCurrentFrequency + mFmBand.getChannelOffset();
+                return updateFrequency(newFrequency, true);
+            }
+        });
+
+        scanDown.setOnLongClickListener (new OnLongClickListener() {
+
+            public boolean onLongClick(View v) {
+                int newFrequency = mCurrentFrequency - mFmBand.getChannelOffset();
+                return updateFrequency(newFrequency, true);
+            }
+        });
+
         scanUp.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
@@ -524,7 +570,7 @@ public class FmRadio extends Activity {
                 scanUp.setEnabled(false);
             }
         });
-        final ImageButton scanDown = (ImageButton) findViewById(R.id.ScanDown);
+
         scanDown.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
@@ -542,7 +588,7 @@ public class FmRadio extends Activity {
                 scanDown.setEnabled(false);
             }
         });
-        final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
+
         pause.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
@@ -582,7 +628,7 @@ public class FmRadio extends Activity {
                 }
             }
         });
-        final ImageButton fullScan = (ImageButton) findViewById(R.id.FullScan);
+
         fullScan.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
@@ -671,6 +717,7 @@ public class FmRadio extends Activity {
                 try {
                     mFmReceiver.reset();
                     mCurrentFrequency = mFmBand.getDefaultFrequency();
+                    updateFrequency(mCurrentFrequency, true);
                 } catch (IOException e) {
                     showToast("Unable to restart the FM Radio", Toast.LENGTH_LONG);
                 }
@@ -684,15 +731,12 @@ public class FmRadio extends Activity {
                 try {
                     if (!mMenuAdapter.getItem(getSelectStationMenuItem(item)).toString().matches(
                             EMPTY_STATION_LIST)) {
-                        mFmReceiver.setFrequency((int) (Double.valueOf(mMenuAdapter.getItem(
-                                getSelectStationMenuItem(item)).toString()) * 1000));
+                        int freq = (int) (Double.valueOf(mMenuAdapter.getItem(
+                                getSelectStationMenuItem(item)).toString()) * 1000);
+                        updateFrequency(freq, true);
                         mFrequencyTextView.setText(mMenuAdapter.getItem(
                                 getSelectStationMenuItem(item)).toString());
                     }
-                } catch (IOException e) {
-                    showToast("Unable to set the frequency", Toast.LENGTH_LONG);
-                } catch (IllegalStateException e) {
-                    showToast("Unable to set the frequency", Toast.LENGTH_LONG);
                 } catch (IllegalArgumentException e) {
                     showToast("Unable to set the frequency", Toast.LENGTH_LONG);
                 }
