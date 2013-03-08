@@ -57,7 +57,7 @@
 			android:layout_height="wrap_content" android:layout_weight="1"
 			android:gravity="center">
 			<ImageButton android:layout_height="64dp" android:layout_weight="1"
-				android:layout_width="wrap_content" android:id="@+id/FullScan"
+				android:layout_width="wrap_content" android:id="@+id/Favorite"
 				android:src="@drawable/favoritebutton" style="?android:attr/borderlessButtonStyle" />
 		</LinearLayout>
 		<LinearLayout android:layout_width="fill_parent"
