@@ -106,13 +106,6 @@ public class FmRadio extends Activity {
     // Indicates if we are in the initialization sequence
     private boolean mInit = true;
 
-    // Indicates that we are restarting the app
-    private boolean mRestart = false;
-
-    // Protects the MediaPlayer and FmReceiver against rapid muting causing
-    // errors
-    private boolean mPauseMutex = false;
-
     // Array of the available stations in MHz
     private ArrayAdapter<CharSequence> mMenuAdapter;
 
@@ -260,10 +253,7 @@ public class FmRadio extends Activity {
         mFmReceiver.addOnRDSDataFoundListener(mReceiverRdsDataFoundListener);
         mFmReceiver.addOnStartedListener(mReceiverStartedListener);
 
-        //if (!mRestart) {
-            turnRadioOn();
-        //}
-        mRestart = false;
+        updateReceiverState(true);
     }
 
     /**
@@ -272,7 +262,6 @@ public class FmRadio extends Activity {
     @Override
     protected void onRestart() {
         super.onRestart();
-        mRestart = true;
     }
 
     /**
@@ -288,20 +277,7 @@ public class FmRadio extends Activity {
             mFmReceiver.removeOnStartedListener(mReceiverStartedListener);
         }
 
-        try {
-            if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED) {
-                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
-                mFmReceiver.reset();
-                if (mMediaPlayer != null) {
-                    mMediaPlayer.release();
-                    mMediaPlayer = null;
-                }
-                mNotificationManager.cancel(1);
-            }
-        } catch (IOException e) {
-            Log.e(LOG_TAG, "Unable to reset correctly", e);
-        }
-
+        updateReceiverState(mFmReceiver.getState() == FmReceiver.STATE_STARTED);
     }
 
     /**
@@ -311,24 +287,14 @@ public class FmRadio extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         SharedPreferences.Editor editor = settings.edit();
         editor.putInt("selectedBand", mSelectedBand);
         editor.putInt("currentFrequency", mCurrentFrequency);
         editor.commit();
-        try {
-            if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED) {
-                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
-                mFmReceiver.reset();
-                if (mMediaPlayer != null) {
-                    mMediaPlayer.release();
-                    mMediaPlayer = null;
-                }
-                mNotificationManager.cancel(1);
-            }
-        } catch (IOException e) {
-            Log.e(LOG_TAG, "Unable to reset correctly", e);
-        }
+
+        updateReceiverState(mFmReceiver.getState() == FmReceiver.STATE_STARTED);
     }
 
     private String getPTYName(int i) {
@@ -411,31 +377,6 @@ public class FmRadio extends Activity {
     /**
      * Starts the FM receiver and makes the buttons appear inactive
      */
-    private void turnRadioOn() {
-        // the receiver might be running already because this activity
-        // was killed
-        if (mFmReceiver.getState() == FmReceiver.STATE_IDLE) {
-            try {
-                mFmReceiver.startAsync(mFmBand);
-                // Darken the the buttons
-                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(false);
-                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(false);
-                ((ImageButton) findViewById(R.id.Pause)).setEnabled(false);
-                ((ImageButton) findViewById(R.id.FullScan)).setEnabled(false);
-                //showToast("Scanning initial stations", Toast.LENGTH_LONG);
-            } catch (IOException e) {
-                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
-            } catch (IllegalStateException e) {
-                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
-            }
-        } else {
-	        updateFrequency(mCurrentFrequency, true);
-        }
-    }
-
-    /**
-     * Starts the FM receiver and makes the buttons appear inactive
-     */
     private void startAudio() {
 
         mMediaPlayer = new MediaPlayer();
@@ -444,7 +385,6 @@ public class FmRadio extends Activity {
             mMediaPlayer.prepare();
             mMediaPlayer.start();
         } catch (IOException e) {
-            //showToast("Unable to start the media player", Toast.LENGTH_LONG);
             // fall back to legacy audio routing
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
@@ -452,31 +392,117 @@ public class FmRadio extends Activity {
     }
 
     /**
-     * Update frequency state and UI
+     * Update FM receiver and audio output state
+     *
+     * @param state requested state
+     */
+    private synchronized void updateReceiverState(boolean state) {
+        if (mFmReceiver.getState() == FmReceiver.STATE_IDLE
+                && state == true) {
+            try {
+                mFmReceiver.startAsync(mFmBand);
+                // Darken the the buttons
+                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.Pause)).setEnabled(false);
+                ((ImageButton) findViewById(R.id.FullScan)).setEnabled(false);
+                // note: audio is initialized in the onStarted callback!
+                // the callback also calls an initial updateFrequency
+            } catch (IOException e) {
+                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
+            } catch (IllegalStateException e) {
+                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
+            }
+        } else if (mFmReceiver.getState() != FmReceiver.STATE_IDLE
+                && state == false) {
+            try {
+                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
+                mFmReceiver.reset();
+                if (mMediaPlayer != null) {
+                    mMediaPlayer.release();
+                    mMediaPlayer = null;
+                }
+                mNotificationManager.cancel(1);
+            } catch (IOException e) {
+                Log.e(LOG_TAG, "Failed to stop FM receiver");
+            }
+        } else if (mFmReceiver.getState() == FmReceiver.STATE_STARTED) {
+            // in case of a hot restart, the onStarted callback is never
+            // called, so we need to set the frequency here
+            updatePlayState(true);
+            if (mCurrentFrequency > 0) {
+                updateFrequency(mCurrentFrequency, true);
+            }
+        } else {
+            Log.i(LOG_TAG, "No action for updateReceiverState: incorrect state - " + mFmReceiver.getState());
+        }
+    }
+
+    /**
+     * Update playback state (paused or playing) and associated UI elements
+     *
+     * @param state requested state
+     */
+    private synchronized void updatePlayState(boolean state) {
+        final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
+
+        if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED
+                && state == true) {
+            try {
+                mFmReceiver.resume();
+                if (mMediaPlayer != null)
+                    mMediaPlayer.start();
+                pause.setImageResource(R.drawable.pausebutton);
+                setNotification(null, mCurrentFrequency);
+            } catch (IOException e) {
+                showToast(R.string.resume_error, Toast.LENGTH_LONG);
+            } catch (IllegalStateException e) {
+                showToast(R.string.resume_error, Toast.LENGTH_LONG);
+            }
+        } else if (mFmReceiver.getState() == FmReceiver.STATE_STARTED
+                && state == false) {
+            try {
+                if (mMediaPlayer != null)
+                    mMediaPlayer.pause();
+                mFmReceiver.pause();
+                pause.setImageResource(R.drawable.playbutton);
+                mNotificationManager.cancel(1);
+            } catch (IOException e) {
+                showToast(R.string.pause_error, Toast.LENGTH_LONG);
+            } catch (IllegalStateException e) {
+                showToast(R.string.pause_error, Toast.LENGTH_LONG);
+            }
+        } else {
+            Log.i(LOG_TAG, "No action for updatePlayState: incorrect state - " + mFmReceiver.getState());
+        }
+    }
+
+    /**
+     * Update frequency state and associated UI elements
      *
      * @param freq new frequency to set in KHz
      * @param whether frequency should be set on the receiver
      *
      */
-    private boolean updateFrequency(int frequency, boolean setFrequency) {
+    private synchronized boolean updateFrequency(int frequency, boolean setFrequency) {
         mCurrentFrequency = frequency;
 
-        if (setFrequency == true) {
-            try {
-                // only change frequency if it's different, otherwise
-                // an audible pop can occur
-                if (mFmReceiver.getFrequency() != frequency)
-                    mFmReceiver.setFrequency(frequency);
-                // resume receiver if it is paused
-                if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
-                    mFmReceiver.resume();
-            } catch (IllegalStateException e) {
-                showToast(R.string.seek_error, Toast.LENGTH_LONG);
-                return false;
-            } catch (IOException e) {
-                showToast(R.string.seek_error, Toast.LENGTH_LONG);
-                return false;
+        try {
+            // resume receiver if it is paused
+            if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED) {
+                updatePlayState(true);
             }
+            // only change frequency if it's different from current, otherwise
+            // an audible pop can occur
+            if (mFmReceiver.getFrequency() != frequency
+                    && setFrequency == true)
+                mFmReceiver.setFrequency(frequency);
+        } catch (IllegalStateException e) {
+            showToast(R.string.seek_error, Toast.LENGTH_LONG);
+            return false;
+        } catch (IOException e) {
+            showToast(R.string.seek_error, Toast.LENGTH_LONG);
+            return false;
         }
 
         mFrequencyTextView.setText(formatFrequency(mCurrentFrequency));
@@ -526,17 +552,8 @@ public class FmRadio extends Activity {
         scanUp.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
-                try {
-                    if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
-                        mFmReceiver.resume();
-                    mFmReceiver.scanUp();
-                } catch (IllegalStateException e) {
-                    showToast(R.string.scan_error, Toast.LENGTH_LONG);
-                    return;
-                } catch (IOException e) {
-                    showToast(R.string.resume_error, Toast.LENGTH_LONG);
-                    return;
-                }
+                updatePlayState(true);
+                mFmReceiver.scanUp();
                 scanUp.setEnabled(false);
             }
         });
@@ -544,17 +561,8 @@ public class FmRadio extends Activity {
         scanDown.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
-                try {
-                    if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED)
-                        mFmReceiver.resume();
-                    mFmReceiver.scanDown();
-                } catch (IllegalStateException e) {
-                    showToast(R.string.scan_error, Toast.LENGTH_LONG);
-                    return;
-                } catch (IOException e) {
-                    showToast(R.string.resume_error, Toast.LENGTH_LONG);
-                    return;
-                }
+                updatePlayState(true);
+                mFmReceiver.scanDown();
                 scanDown.setEnabled(false);
             }
         });
@@ -562,40 +570,7 @@ public class FmRadio extends Activity {
         pause.setOnClickListener(new OnClickListener() {
 
             public void onClick(View v) {
-                if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED && mPauseMutex != true) {
-                    try {
-                        mPauseMutex = true;
-                        mFmReceiver.resume();
-                        if (mMediaPlayer != null)
-                            mMediaPlayer.start();
-                        pause.setImageResource(R.drawable.pausebutton);
-                        setNotification(null, mCurrentFrequency);
-                    } catch (IOException e) {
-                        showToast(R.string.resume_error, Toast.LENGTH_LONG);
-                    } catch (IllegalStateException e) {
-                        showToast(R.string.resume_error, Toast.LENGTH_LONG);
-                    }
-                    mPauseMutex = false;
-                } else if (mFmReceiver.getState() == FmReceiver.STATE_STARTED
-                        && mPauseMutex != true) {
-                    try {
-                        mPauseMutex = true;
-                        if (mMediaPlayer != null)
-                            mMediaPlayer.pause();
-                        mFmReceiver.pause();
-                        pause.setImageResource(R.drawable.playbutton);
-                        mNotificationManager.cancel(1);
-                    } catch (IOException e) {
-                        showToast(R.string.pause_error, Toast.LENGTH_LONG);
-                    } catch (IllegalStateException e) {
-                        showToast(R.string.pause_error, Toast.LENGTH_LONG);
-                    }
-                    mPauseMutex = false;
-                } else if (mPauseMutex) {
-                    showToast(R.string.busy_error, Toast.LENGTH_LONG);
-                } else {
-                    Log.i(LOG_TAG, "No action: incorrect state - " + mFmReceiver.getState());
-                }
+                updatePlayState(mFmReceiver.getState() == FmReceiver.STATE_PAUSED);
             }
         });
 
@@ -684,18 +659,9 @@ public class FmRadio extends Activity {
                         break;
                 }
                 mFmBand = new FmBand(mSelectedBand);
-                try {
-                    mFmReceiver.reset();
-                    mCurrentFrequency = mFmBand.getDefaultFrequency();
-                    updateFrequency(mCurrentFrequency, true);
-                } catch (IOException e) {
-                    showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
-                }
-                if (mMediaPlayer != null) {
-                    mMediaPlayer.release();
-                    mMediaPlayer = null;
-                }
-                turnRadioOn();
+                mCurrentFrequency = mFmBand.getDefaultFrequency();
+                updateReceiverState(false);
+                updateReceiverState(true);
                 break;
             case STATION_SELECTION_MENU:
                 try {
