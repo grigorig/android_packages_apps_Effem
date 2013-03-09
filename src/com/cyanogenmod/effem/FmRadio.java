@@ -45,7 +45,8 @@ import android.app.PendingIntent;
 import android.content.Intent;
 
 import java.io.IOException;
-
+import java.util.Comparator;
+import org.json.*;
 
 public class FmRadio extends Activity {
 
@@ -101,7 +102,7 @@ public class FmRadio extends Activity {
     private Notification.Builder mRadioNotification;
 
     // Array of the available stations in MHz
-    private ArrayAdapter<CharSequence> mMenuAdapter;
+    private ArrayAdapter<MenuTuple> mMenuAdapter;
 
     // Notification display
     private NotificationManager mNotificationManager;
@@ -260,6 +261,16 @@ public class FmRadio extends Activity {
         SharedPreferences.Editor editor = settings.edit();
         editor.putInt("selectedBand", mSelectedBand);
         editor.putInt("currentFrequency", mCurrentFrequency);
+        try {
+            JSONObject conf = new JSONObject();
+            JSONArray stations = new JSONArray();
+            conf.put("stations", stations);
+            for (int i=0; i < mMenuAdapter.getCount(); i++)
+                stations.put(mMenuAdapter.getItem(i).toJSON());
+            editor.putString("stations", conf.toString());
+        } catch (JSONException e) {
+            Log.e(LOG_TAG, "Failed to save station list");
+        }
         editor.commit();
 
         // disable receiver if audio is paused
@@ -463,6 +474,12 @@ public class FmRadio extends Activity {
         mStationNameTextView.setText(R.string.no_rds);
         mProgramTypeTextView.setText("");
 
+        final ImageButton favorite = (ImageButton) findViewById(R.id.Favorite);
+        if (getFavorite(frequency))
+            favorite.setImageResource(R.drawable.favoritebuttonpress);
+        else
+            favorite.setImageResource(R.drawable.favoritebutton);
+
         return true;
     }
 
@@ -471,9 +488,19 @@ public class FmRadio extends Activity {
      */
     private void setupButtons() {
         // populate favorites menu
-        mMenuAdapter = new ArrayAdapter<CharSequence>(this, android.R.layout.simple_spinner_item);
-        mMenuAdapter.setDropDownViewResource(android.R.layout.simple_list_item_single_choice);
-        mMenuAdapter.add(getResources().getString(R.string.no_stations));
+        mMenuAdapter = new ArrayAdapter<MenuTuple>(this, android.R.layout.simple_spinner_item);
+
+        try {
+            SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+            JSONObject conf = new JSONObject(settings.getString("stations", ""));
+            JSONArray stations = conf.getJSONArray("stations");
+            for (int i=0; i < stations.length(); i++) {
+                MenuTuple mt = MenuTuple.fromJSON(stations.getJSONObject(i));
+                mMenuAdapter.add(mt);
+            }
+        } catch (JSONException e) {
+            Log.e(LOG_TAG, "Failed to load station list");
+        }
 
         // get references to buttons
         mFrequencyTextView = (TextView) findViewById(R.id.FrequencyTextView);
@@ -524,9 +551,51 @@ public class FmRadio extends Activity {
 
         favorite.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                // TODO
+                toggleFavorite(v, mCurrentFrequency);
             }
         });
+    }
+
+    private boolean getFavorite(int frequency) {
+        for (int i = 0; i < mMenuAdapter.getCount(); i++) {
+            if (mMenuAdapter.getItem(i).frequency == frequency)
+                return true;
+        }
+        return false;
+    }
+
+    private void toggleFavorite(View v, int frequency) {
+        final ImageButton favorite = (ImageButton) findViewById(R.id.Favorite);
+
+        // check if it already exists
+        if (getFavorite(frequency)) {
+            // favorite should be removed
+            for (int i = 0; i < mMenuAdapter.getCount(); i++) {
+                if (mMenuAdapter.getItem(i).frequency == frequency)
+                    mMenuAdapter.remove(mMenuAdapter.getItem(i));
+            }
+            invalidateOptionsMenu();
+            favorite.setImageResource(R.drawable.favoritebutton);
+        } else {
+            // insert favorite
+            String freqString = "";
+            if (mStationNameTextView.getText() != "")
+                freqString = mStationNameTextView.getText() + " (" + formatFrequency(frequency) + ")";
+            else
+                freqString = formatFrequency(frequency);
+            mMenuAdapter.add(new MenuTuple(frequency, freqString));
+            // sort (ascending)
+            mMenuAdapter.sort(new Comparator<MenuTuple>() {
+                public int compare(MenuTuple l, MenuTuple r) {
+                    return l.frequency - r.frequency;
+                }
+                public boolean equals(Object obj) {
+                    return this == obj;
+                }
+            });
+            invalidateOptionsMenu();
+            favorite.setImageResource(R.drawable.favoritebuttonpress);
+        }
     }
 
     /**
@@ -560,9 +629,8 @@ public class FmRadio extends Activity {
             subMenu.setGroupEnabled(STATION_SELECTION_MENU, true);
             for (int i = 0; i < mMenuAdapter.getCount(); i++) {
                 subMenu.add(STATION_SELECTION_MENU, STATION_SELECT_MENU_ITEMS + i, Menu.NONE,
-                        mMenuAdapter.getItem(i));
+                        mMenuAdapter.getItem(i).toString());
             }
-            subMenu.setGroupCheckable(STATION_SELECTION_MENU, true, true);
         }
         return result;
     }
@@ -605,23 +673,41 @@ public class FmRadio extends Activity {
                 updateReceiverState(true);
                 break;
             case STATION_SELECTION_MENU:
-                try {
-                    if (!mMenuAdapter.getItem(getSelectStationMenuItem(item)).toString().matches(
-                            getResources().getString(R.string.no_stations))) {
-                        int freq = (int) (Double.valueOf(mMenuAdapter.getItem(
-                                getSelectStationMenuItem(item)).toString()) * 1000);
-                        updateFrequency(freq, true);
-                        mFrequencyTextView.setText(mMenuAdapter.getItem(
-                                getSelectStationMenuItem(item)).toString());
-                    }
-                } catch (IllegalArgumentException e) {
-                    showToast(R.string.seek_error, Toast.LENGTH_LONG);
-                }
-
+                int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
+                updateFrequency(freq, true);
                 break;
             default:
                 break;
         }
         return super.onOptionsItemSelected(item);
+    }
+}
+
+class MenuTuple {
+    public int frequency;
+    public String name;
+
+    public MenuTuple(int frequency, String name) {
+        this.frequency = frequency;
+        this.name = name;
+    }
+
+    public String toString() {
+        return name;
+    }
+
+    // JSON
+
+    public JSONObject toJSON() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("frequency", frequency);
+        json.put("name", name);
+        return json;
+    }
+
+    public static MenuTuple fromJSON(JSONObject json) throws JSONException {
+        MenuTuple mt = new MenuTuple(json.getInt("frequency"),
+                json.getString("name"));
+        return mt;
     }
 }
