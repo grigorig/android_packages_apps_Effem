@@ -9,7 +9,7 @@
 	<string name="station_select">Station wählen</string>
 	<string name="fmradio">FM RADIO</string>
 	<string name="dashes">- - - -</string>
-	<string name="no_rds">NO RDS</string>
+	<string name="no_rds">KEIN RDS</string>
 	<string name="no_stations">Keine Stationen</string>
 	<string name="scan_error">Kann Suchlauf nicht starten</string>
 	<string name="fm_start_error">Kann Radioempfänger nicht starten</string>
@@ -17,4 +17,38 @@
 	<string name="resume_error">Kann nicht fortsetzen</string>
 	<string name="pause_error">Kann nicht pausieren</string>
 	<string name="busy_error">Beschäftigt, bitte später versuchen</string>
+    <string-array name="pty_names">
+        <item>Unbekannt</item>
+        <item>Nachrichten</item>
+        <item>Zeitgeschehen</item>
+        <item>Information</item>
+        <item>Sport</item>
+        <item>Lernen &amp; Bildung</item>
+        <item>Hörspiel</item>
+        <item>Kultur</item>
+        <item>Wissenschaft</item>
+        <item>Verschiedenes</item>
+        <item>Pop</item>
+        <item>Rock</item>
+        <item>Easy Listening</item>
+        <item>Leichte Klassik</item>
+        <item>Ernste Klassik</item>
+        <item>Andere Musik</item>
+        <item>Wetter</item>
+        <item>Finanzen</item>
+        <item>Kinder</item>
+        <item>Gesellschaft</item>
+        <item>Religion</item>
+        <item>Anrufsendung</item>
+        <item>Reisen</item>
+        <item>Freizeit</item>
+        <item>Jazz</item>
+        <item>Country</item>
+        <item>Nationalmusik</item>
+        <item>Oldies</item>
+        <item>Volksmusik</item>
+        <item>Dokumentation</item>
+        <item>Testalarm</item>
+        <item>ALARM</item>
+    </string-array>
 </resources>
