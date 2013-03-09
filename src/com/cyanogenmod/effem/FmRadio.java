@@ -95,6 +95,9 @@ public class FmRadio extends Activity {
 	// current tuned frequency, in khz
 	private int mCurrentFrequency;
 
+    // track whether the activity restarted
+    private boolean mFirstStart = true;
+
     // Handle to the FM radio receiver object
     private FmReceiver mFmReceiver;
 
@@ -158,13 +161,7 @@ public class FmRadio extends Activity {
         setupButtons();
     }
 
-    /**
-     * Starts up the listeners and the FM radio if it isn't already active
-     */
-    @Override
-    protected void onStart() {
-        super.onStart();
-
+    public void registerCallbacks() {
         mReceiverScanListener = new com.stericsson.hardware.fm.FmReceiver.OnScanListener() {
             public void onFullScan(int[] frequency, int[] signalStrength, boolean aborted) {
                 // not implemented, because full scan is not used
@@ -215,20 +212,33 @@ public class FmRadio extends Activity {
                 ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
                 ((ImageButton) findViewById(R.id.Pause)).setEnabled(true);
                 ((ImageButton) findViewById(R.id.Favorite)).setEnabled(true);
-                startAudio();
-                if (mCurrentFrequency > 0) {
-                    updateFrequency(mCurrentFrequency, true);
-                } else {
+                updateAudioState(true);
+                if (mCurrentFrequency <= 0) {
                     mFmReceiver.scanUp();
                 }
+                updatePlayState(true);
+                updateFrequency(mCurrentFrequency, true);
             }
         };
 
         mFmReceiver.addOnScanListener(mReceiverScanListener);
         mFmReceiver.addOnRDSDataFoundListener(mReceiverRdsDataFoundListener);
         mFmReceiver.addOnStartedListener(mReceiverStartedListener);
+    }
 
-        updateReceiverState(true);
+    /**
+     * Starts up the listeners and the FM radio if it isn't already active
+     */
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        registerCallbacks();
+
+        if (mFirstStart) {
+            updateReceiverState(true);
+            mFirstStart = false;
+        }
     }
 
     /**
@@ -239,13 +249,12 @@ public class FmRadio extends Activity {
         super.onStop();
 
         if (mFmReceiver != null) {
+            // remove callbacks to save power
             mFmReceiver.removeOnScanListener(mReceiverScanListener);
             mFmReceiver.removeOnRDSDataFoundListener(mReceiverRdsDataFoundListener);
             mFmReceiver.removeOnStartedListener(mReceiverStartedListener);
         }
 
-        // disable receiver if audio is paused
-        updateReceiverState(mFmReceiver.getState() == FmReceiver.STATE_STARTED);
     }
 
     /**
@@ -272,9 +281,6 @@ public class FmRadio extends Activity {
             Log.e(LOG_TAG, "Failed to save station list");
         }
         editor.commit();
-
-        // disable receiver if audio is paused
-        updateReceiverState(mFmReceiver.getState() == FmReceiver.STATE_STARTED);
     }
 
     private String getPTYName(int i) {
@@ -338,19 +344,31 @@ public class FmRadio extends Activity {
     }
 
     /**
-     * Starts the FM receiver and makes the buttons appear inactive
+     * Toggles FM audio routing
+     *
+     * @param state desired state
      */
-    private void startAudio() {
+    private void updateAudioState(boolean state) {
 
-        mMediaPlayer = new MediaPlayer();
-        try {
-            mMediaPlayer.setDataSource("fmradio://rx");
-            mMediaPlayer.prepare();
-            mMediaPlayer.start();
-        } catch (IOException e) {
-            // fall back to legacy audio routing
+        if (state == true) {
+            // try digital audio playback first
+            try {
+                mMediaPlayer = new MediaPlayer();
+                mMediaPlayer.setDataSource("fmradio://rx");
+                mMediaPlayer.prepare();
+                mMediaPlayer.start();
+            } catch (IOException e) {
+                // fall back to legacy audio routing
+                mMediaPlayer = null;
+                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
+                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
+            }
+        } else {
+            if (mMediaPlayer != null) {
+                mMediaPlayer.release();
+                mMediaPlayer = null;
+            }
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
-            AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
         }
     }
 
@@ -379,12 +397,9 @@ public class FmRadio extends Activity {
         } else if (mFmReceiver.getState() != FmReceiver.STATE_IDLE
                 && state == false) {
             try {
-                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
+                updatePlayState(false);
+                updateAudioState(false);
                 mFmReceiver.reset();
-                if (mMediaPlayer != null) {
-                    mMediaPlayer.release();
-                    mMediaPlayer = null;
-                }
                 mNotificationManager.cancel(1);
             } catch (IOException e) {
                 Log.e(LOG_TAG, "Failed to stop FM receiver");
@@ -409,21 +424,18 @@ public class FmRadio extends Activity {
     private synchronized void updatePlayState(boolean state) {
         final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
 
-        if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED
-                && state == true) {
+        if (state == true) {
             try {
                 mFmReceiver.resume();
                 if (mMediaPlayer != null)
                     mMediaPlayer.start();
                 pause.setImageResource(R.drawable.pausebutton);
-                setNotification(null, mCurrentFrequency);
             } catch (IOException e) {
                 showToast(R.string.resume_error, Toast.LENGTH_LONG);
             } catch (IllegalStateException e) {
                 showToast(R.string.resume_error, Toast.LENGTH_LONG);
             }
-        } else if (mFmReceiver.getState() == FmReceiver.STATE_STARTED
-                && state == false) {
+        } else {
             try {
                 if (mMediaPlayer != null)
                     mMediaPlayer.pause();
@@ -435,8 +447,6 @@ public class FmRadio extends Activity {
             } catch (IllegalStateException e) {
                 showToast(R.string.pause_error, Toast.LENGTH_LONG);
             }
-        } else {
-            Log.i(LOG_TAG, "No action for updatePlayState: incorrect state - " + mFmReceiver.getState());
         }
     }
 
@@ -451,10 +461,6 @@ public class FmRadio extends Activity {
         mCurrentFrequency = frequency;
 
         try {
-            // resume receiver if it is paused
-            if (mFmReceiver.getState() == FmReceiver.STATE_PAUSED) {
-                updatePlayState(true);
-            }
             // only change frequency if it's different from current, otherwise
             // an audible pop can occur
             if (mFmReceiver.getFrequency() != frequency
@@ -529,7 +535,7 @@ public class FmRadio extends Activity {
 
         scanUp.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                updatePlayState(true);
+                updateReceiverState(true);
                 mFmReceiver.scanUp();
                 scanUp.setEnabled(false);
             }
@@ -537,7 +543,7 @@ public class FmRadio extends Activity {
 
         scanDown.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                updatePlayState(true);
+                updateReceiverState(true);
                 mFmReceiver.scanDown();
                 scanDown.setEnabled(false);
             }
@@ -545,7 +551,7 @@ public class FmRadio extends Activity {
 
         pause.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                updatePlayState(mFmReceiver.getState() == FmReceiver.STATE_PAUSED);
+                updateReceiverState(mFmReceiver.getState() == FmReceiver.STATE_IDLE);
             }
         });
 
