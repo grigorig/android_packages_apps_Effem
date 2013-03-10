@@ -27,7 +27,7 @@
 		<!-- frequency -->
 		<TextView android:layout_width="fill_parent" android:fontFamily="sans-serif-light"
 			android:layout_height="wrap_content" android:id="@+id/FrequencyTextView"
-			android:lines="1" android:textSize="105dp" android:gravity="center_horizontal|top"
+			android:lines="1" android:textSize="105dp" android:gravity="center"
 			android:text="@string/dashes" android:includeFontPadding="false"></TextView>
 
 		<!-- radio text -->
@@ -36,7 +36,7 @@
 			android:textSize="16dp" android:id="@+id/RTTextView" android:gravity="center" 		
 			android:paddingLeft="12dp" android:paddingRight="12dp"
 			android:singleLine="true" android:ellipsize="marquee"
-		    android:scrollHorizontally="true"
+		    android:scrollHorizontally="true" android:paddingTop="8dp"
 		    android:marqueeRepeatLimit="marquee_forever"
 		    android:includeFontPadding="false"></TextView>
 	</LinearLayout>
