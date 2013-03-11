@@ -22,7 +22,7 @@ import android.content.pm.ActivityInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
-import android.os.Bundle;
+import android.os.*;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -35,101 +35,48 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.stericsson.hardware.fm.FmBand;
-import com.stericsson.hardware.fm.FmReceiver;
 import android.media.AudioManager;
-import android.media.AudioSystem;
-import android.app.Notification.Builder;
-import android.app.Notification;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.ComponentName;
 
 import java.io.IOException;
 import java.util.Comparator;
 import org.json.*;
 
-public class FmRadio extends Activity {
+public class FmRadio extends Activity
+        implements FmRadioService.Callbacks, ServiceConnection {
 
-    // The string to find in android logs
     private static final String LOG_TAG = "Effem";
+    public static final String PREFS_NAME = "FMRadioPrefsFile";
 
-    // The 50kHz channel offset
-    private static final int CHANNEL_OFFSET_50KHZ = 50;
-
-    // The base menu identifier
+    // Menu identifiers
     private static final int BASE_OPTION_MENU = 0;
-
-    // The band menu identifier
     private static final int BAND_SELECTION_MENU = 1;
-
-    // The station menu identifier
     private static final int STATION_SELECTION_MENU = 2;
+    public static final int FM_BAND = Menu.FIRST;
+    public static final int BAND_US = Menu.FIRST + 1;
+    public static final int BAND_EU = Menu.FIRST + 2;
+    public static final int BAND_JAPAN = Menu.FIRST + 3;
+    public static final int BAND_CHINA = Menu.FIRST + 4;
+    public static final int STATION_SELECT = Menu.FIRST + 5;
+    public static final int STATION_SELECT_MENU_ITEMS = STATION_SELECT + 1;
 
-    // Handle to the Media Player that plays the audio from the selected station
-    private MediaPlayer mMediaPlayer;
-
-    // The scan listener that receives the return values from the scans
-    private FmReceiver.OnScanListener mReceiverScanListener;
-
-    // The listener that receives the RDS data from the current channel
-    private FmReceiver.OnRDSDataFoundListener mReceiverRdsDataFoundListener;
-
-    // The started listener is activated when the radio has started
-    private FmReceiver.OnStartedListener mReceiverStartedListener;
-
-    // Displays the currently tuned frequency
+    // Views for frequency, station name, program type and radio text
     private TextView mFrequencyTextView;
-
-    // Displays the current station name if there is adequate RDS data
     private TextView mStationNameTextView;
-
-    // Displays radio text information from RDS data
+    private TextView mProgramTypeTextView;
     private TextView mStationInfoTextView;
 
-    // Displays program type name from RDS data
-    private TextView mProgramTypeTextView;
-
-    // Handle to the FM radio Band object
-    private FmBand mFmBand;
-
-	// current tuned frequency, in khz
+    // FM state
+    private FmRadioService mService;
 	private int mCurrentFrequency;
-
-    // track whether the activity restarted
     private boolean mFirstStart = true;
-
-    // Handle to the FM radio receiver object
-    private FmReceiver mFmReceiver;
-
-    // Notification that shows when radio is running
-    private Notification.Builder mRadioNotification;
+    private int mSelectedBand;
 
     // Array of the available stations in MHz
     private ArrayAdapter<MenuTuple> mMenuAdapter;
-
-    // Notification display
-    private NotificationManager mNotificationManager;
-
-    // The name of the storage string
-    public static final String PREFS_NAME = "FMRadioPrefsFile";
-
-    // The menu items
-    public static final int FM_BAND = Menu.FIRST;
-
-    public static final int BAND_US = Menu.FIRST + 1;
-
-    public static final int BAND_EU = Menu.FIRST + 2;
-
-    public static final int BAND_JAPAN = Menu.FIRST + 3;
-
-    public static final int BAND_CHINA = Menu.FIRST + 4;
-
-    public static final int STATION_SELECT = Menu.FIRST + 5;
-
-    public static final int STATION_SELECT_MENU_ITEMS = STATION_SELECT + 1;
-
-    // The currently selected FM Radio band
-    private int mSelectedBand;
 
     /**
      * Required method from parent class
@@ -141,89 +88,17 @@ public class FmRadio extends Activity {
         super.onCreate(icicle);
         setContentView(R.layout.main);
 
-        // get service instances
-        mFmReceiver = (FmReceiver) getSystemService("fm_receiver");
-        mNotificationManager =
-                (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
-
         // restore preferences
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         mSelectedBand = settings.getInt("selectedBand", 1);
         mCurrentFrequency = settings.getInt("currentFrequency", 0);
-        mFmBand = new FmBand(mSelectedBand);
 
         // misc setup
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
         // ui preparations
-        prepareNotification();
         setupButtons();
-    }
-
-    public void registerCallbacks() {
-        mReceiverScanListener = new com.stericsson.hardware.fm.FmReceiver.OnScanListener() {
-            public void onFullScan(int[] frequency, int[] signalStrength, boolean aborted) {
-                // not implemented, because full scan is not used
-            }
-
-            public void onScan(int tunedFrequency, int signalStrength, int scanDirection, boolean aborted) {
-                updateFrequency(tunedFrequency, false);
-                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(true);
-                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
-            }
-        };
-
-        mReceiverRdsDataFoundListener = new com.stericsson.hardware.fm.FmReceiver.OnRDSDataFoundListener() {
-            // Receives the current frequency's RDS Data
-            public void onRDSDataFound(Bundle rdsData, int frequency) {
-                if (mFmReceiver.getState() != FmReceiver.STATE_STARTED)
-                    return;
-
-                if (rdsData.containsKey("PSN")) {
-                    mStationNameTextView.setText(rdsData.getString("PSN").trim());
-                    setNotification(rdsData.getString("PSN").trim(), mCurrentFrequency);
-                }
-                
-                if (rdsData.containsKey("RT")) {
-                	String text = rdsData.getString("RT").trim();
-
-                	// only update if the text differs, otherwise this messes
-                	// up the marquee
-                	if (!mStationInfoTextView.getText().equals(text))
-                    	mStationInfoTextView.setText(text);
-                }
-
-                if (rdsData.containsKey("PTY")) {
-                    int pty = rdsData.getShort("PTY");
-                    if (pty > 0)
-                        mProgramTypeTextView.setText(getPTYName(pty));
-                    else
-                        mProgramTypeTextView.setText("");
-                }
-
-            }
-        };
-
-        mReceiverStartedListener = new com.stericsson.hardware.fm.FmReceiver.OnStartedListener() {
-            public void onStarted() {
-                // Activate all the buttons
-                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(true);
-                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
-                ((ImageButton) findViewById(R.id.Pause)).setEnabled(true);
-                ((ImageButton) findViewById(R.id.Favorite)).setEnabled(true);
-                updateAudioState(true);
-                if (mCurrentFrequency <= 0) {
-                    mFmReceiver.scanUp();
-                }
-                updatePlayState(true);
-                updateFrequency(mCurrentFrequency, true);
-            }
-        };
-
-        mFmReceiver.addOnScanListener(mReceiverScanListener);
-        mFmReceiver.addOnRDSDataFoundListener(mReceiverRdsDataFoundListener);
-        mFmReceiver.addOnStartedListener(mReceiverStartedListener);
     }
 
     /**
@@ -233,12 +108,28 @@ public class FmRadio extends Activity {
     protected void onStart() {
         super.onStart();
 
-        registerCallbacks();
+        // start and bind to service
+        startService(new Intent(this, FmRadioService.class));
+        bindService(new Intent(this, FmRadioService.class), this,
+                Context.BIND_AUTO_CREATE);
+    }
 
+    @Override
+    public void onServiceConnected(ComponentName component, IBinder binder) {
+        mService = ((FmRadioService.LocalBinder)binder).getService();
+        mService.setCallbacks(this);
+
+        // start radio on initial start
         if (mFirstStart) {
-            updateReceiverState(true);
+            mService.startRadio(mSelectedBand, mCurrentFrequency);
             mFirstStart = false;
         }
+        mService.resumeCallbacks();
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName component) {
+        mService = null;
     }
 
     /**
@@ -248,13 +139,16 @@ public class FmRadio extends Activity {
     protected void onStop() {
         super.onStop();
 
-        if (mFmReceiver != null) {
-            // remove callbacks to save power
-            mFmReceiver.removeOnScanListener(mReceiverScanListener);
-            mFmReceiver.removeOnRDSDataFoundListener(mReceiverRdsDataFoundListener);
-            mFmReceiver.removeOnStartedListener(mReceiverStartedListener);
-        }
+        // suspend callbacks to save power
+        // especially, this will disable RDS
+        mService.suspendCallbacks();
 
+        // unbind from service
+        unbindService(this);
+
+        // if no playback is going on, the service can exit
+        if (mService.isStarted() == false)
+            stopService(new Intent(this, FmRadioService.class));
     }
 
     /**
@@ -283,199 +177,27 @@ public class FmRadio extends Activity {
         editor.commit();
     }
 
-    private String getPTYName(int i) {
-        return getResources().getStringArray(R.array.pty_names)[i];
+    @Override
+    public void onReceiverStateChanged(boolean state) {
+        Log.i(LOG_TAG, "onReceiverStateChanged " + state);
+
+        // switch button image for play/pause
+        if (state == true)
+            ((ImageButton) findViewById(R.id.Pause)).setImageResource(R.drawable.pausebutton);
+        else
+            ((ImageButton) findViewById(R.id.Pause)).setImageResource(R.drawable.playbutton);
     }
 
-    /**
-     * Helper method to display toast
-     */
-    private void showToast(final String text, final int duration) {
-        runOnUiThread(new Runnable() {
-            public void run() {
-                Toast.makeText(getApplicationContext(), text, duration).show();
-            }
-        });
-    }
-
-    private void showToast(int id, int duration) {
-        showToast(getResources().getString(id), duration);
-    }
-
-    /**
-     * Prepare notification object
-     *
-     */
-    private void prepareNotification() {
-        // create notification builder
-        mRadioNotification = new Notification.Builder(this)
-                .setSmallIcon(R.drawable.stat_notify_fm)
-                .setOngoing(true)
-                .setWhen(0);
-
-        // switch to activity when notification is clicked
-        PendingIntent resultIntent = PendingIntent.getActivity(this, 0,
-                new Intent(this, FmRadio.class), 0);
-        mRadioNotification.setContentIntent(resultIntent);
-    }
-
-    private void setNotification(String stationName, int frequency) {
-        if (stationName != null && frequency > 0) {
-            mRadioNotification.setContentTitle(stationName)
-                .setContentText(formatFrequency(frequency) + " MHz");
-            Notification n = mRadioNotification.build();
-            mNotificationManager.notify(1, n);
-        } else if (frequency > 0) {
-            mRadioNotification.setContentTitle(formatFrequency(frequency) + " MHz")
-                .setContentText("");
-            Notification n = mRadioNotification.build();
-            mNotificationManager.notify(1, n);
-        }
-    }
-
-    private String formatFrequency (int frequency) {
-        String a = Double.toString((double) frequency / 1000);
-        if (mFmBand.getChannelOffset() == CHANNEL_OFFSET_50KHZ) {
-            a = String.format(a, "%.2f");
-        } else {
-            a = String.format(a, "%.1f");
-        }
-        return a;
-    }
-
-    /**
-     * Toggles FM audio routing
-     *
-     * @param state desired state
-     */
-    private void updateAudioState(boolean state) {
-
-        if (state == true) {
-            // try digital audio playback first
-            try {
-                mMediaPlayer = new MediaPlayer();
-                mMediaPlayer.setDataSource("fmradio://rx");
-                mMediaPlayer.prepare();
-                mMediaPlayer.start();
-            } catch (IOException e) {
-                // fall back to legacy audio routing
-                mMediaPlayer = null;
-                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
-                AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
-            }
-        } else {
-            if (mMediaPlayer != null) {
-                mMediaPlayer.release();
-                mMediaPlayer = null;
-            }
-            AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
-        }
-    }
-
-    /**
-     * Update FM receiver and audio output state
-     *
-     * @param state requested state
-     */
-    private synchronized void updateReceiverState(boolean state) {
-        if (mFmReceiver.getState() == FmReceiver.STATE_IDLE
-                && state == true) {
-            try {
-                mFmReceiver.startAsync(mFmBand);
-                // Darken the the buttons
-                ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(false);
-                ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(false);
-                ((ImageButton) findViewById(R.id.Pause)).setEnabled(false);
-                ((ImageButton) findViewById(R.id.Favorite)).setEnabled(false);
-                // note: audio is initialized in the onStarted callback!
-                // the callback also calls an initial updateFrequency
-            } catch (IOException e) {
-                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
-            } catch (IllegalStateException e) {
-                showToast(R.string.fm_start_error, Toast.LENGTH_LONG);
-            }
-        } else if (mFmReceiver.getState() != FmReceiver.STATE_IDLE
-                && state == false) {
-            try {
-                updatePlayState(false);
-                updateAudioState(false);
-                mFmReceiver.reset();
-                mNotificationManager.cancel(1);
-            } catch (IOException e) {
-                Log.e(LOG_TAG, "Failed to stop FM receiver");
-            }
-        } else if (mFmReceiver.getState() == FmReceiver.STATE_STARTED) {
-            // in case of a hot restart, the onStarted callback is never
-            // called, so we need to set the frequency here
-            updatePlayState(true);
-            if (mCurrentFrequency > 0) {
-                updateFrequency(mCurrentFrequency, true);
-            }
-        } else {
-            Log.i(LOG_TAG, "No action for updateReceiverState: incorrect state - " + mFmReceiver.getState());
-        }
-    }
-
-    /**
-     * Update playback state (paused or playing) and associated UI elements
-     *
-     * @param state requested state
-     */
-    private synchronized void updatePlayState(boolean state) {
-        final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
-
-        if (state == true) {
-            try {
-                mFmReceiver.resume();
-                if (mMediaPlayer != null)
-                    mMediaPlayer.start();
-                pause.setImageResource(R.drawable.pausebutton);
-            } catch (IOException e) {
-                showToast(R.string.resume_error, Toast.LENGTH_LONG);
-            } catch (IllegalStateException e) {
-                showToast(R.string.resume_error, Toast.LENGTH_LONG);
-            }
-        } else {
-            try {
-                if (mMediaPlayer != null)
-                    mMediaPlayer.pause();
-                mFmReceiver.pause();
-                pause.setImageResource(R.drawable.playbutton);
-                mNotificationManager.cancel(1);
-            } catch (IOException e) {
-                showToast(R.string.pause_error, Toast.LENGTH_LONG);
-            } catch (IllegalStateException e) {
-                showToast(R.string.pause_error, Toast.LENGTH_LONG);
-            }
-        }
-    }
-
-    /**
-     * Update frequency state and associated UI elements
-     *
-     * @param freq new frequency to set in KHz
-     * @param whether frequency should be set on the receiver
-     *
-     */
-    private synchronized boolean updateFrequency(int frequency, boolean setFrequency) {
+    @Override
+    public void onFrequencyChanged(int frequency, int offset) {
         mCurrentFrequency = frequency;
+        String freqFormatted = FmUtils.formatFrequency(offset,
+                mCurrentFrequency);
 
-        try {
-            // only change frequency if it's different from current, otherwise
-            // an audible pop can occur
-            if (mFmReceiver.getFrequency() != frequency
-                    && setFrequency == true)
-                mFmReceiver.setFrequency(frequency);
-        } catch (IllegalStateException e) {
-            showToast(R.string.seek_error, Toast.LENGTH_LONG);
-            return false;
-        } catch (IOException e) {
-            showToast(R.string.seek_error, Toast.LENGTH_LONG);
-            return false;
-        }
+        ((ImageButton) findViewById(R.id.ScanUp)).setEnabled(true);
+        ((ImageButton) findViewById(R.id.ScanDown)).setEnabled(true);
 
-        mFrequencyTextView.setText(formatFrequency(mCurrentFrequency));
-        setNotification(null, mCurrentFrequency);
+        mFrequencyTextView.setText(freqFormatted);
         mStationInfoTextView.setText("");
         mStationNameTextView.setText(R.string.no_rds);
         mProgramTypeTextView.setText("");
@@ -485,8 +207,30 @@ public class FmRadio extends Activity {
             favorite.setImageResource(R.drawable.favoritebuttonpress);
         else
             favorite.setImageResource(R.drawable.favoritebutton);
+    }
 
-        return true;
+    @Override
+    public void onRdsDataAvailable(Bundle rdsData) {
+        if (rdsData.containsKey("PSN")) {
+            mStationNameTextView.setText(rdsData.getString("PSN").trim());
+        }
+
+        if (rdsData.containsKey("RT")) {
+            String text = rdsData.getString("RT").trim();
+
+            // only update if the text differs, otherwise this messes
+            // up the marquee
+            if (!mStationInfoTextView.getText().equals(text))
+                mStationInfoTextView.setText(text);
+        }
+
+        if (rdsData.containsKey("PTY")) {
+            int pty = rdsData.getShort("PTY");
+            if (pty > 0)
+                mProgramTypeTextView.setText(FmUtils.getPTYName(this, pty));
+            else
+                mProgramTypeTextView.setText("");
+        }
     }
 
     /**
@@ -521,37 +265,42 @@ public class FmRadio extends Activity {
 
         scanUp.setOnLongClickListener (new OnLongClickListener() {
             public boolean onLongClick(View v) {
-                int newFrequency = mCurrentFrequency + mFmBand.getChannelOffset();
-                return updateFrequency(newFrequency, true);
+                scanUp.setEnabled(false);
+                mService.startRadio(mSelectedBand, mCurrentFrequency);
+                return mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
             }
         });
 
         scanDown.setOnLongClickListener (new OnLongClickListener() {
             public boolean onLongClick(View v) {
-                int newFrequency = mCurrentFrequency - mFmBand.getChannelOffset();
-                return updateFrequency(newFrequency, true);
+                scanDown.setEnabled(false);
+                mService.startRadio(mSelectedBand, mCurrentFrequency);
+                return mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
             }
         });
 
         scanUp.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                updateReceiverState(true);
-                mFmReceiver.scanUp();
+                mService.startRadio(mSelectedBand, mCurrentFrequency);
+                mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
                 scanUp.setEnabled(false);
             }
         });
 
         scanDown.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                updateReceiverState(true);
-                mFmReceiver.scanDown();
+                mService.startRadio(mSelectedBand, mCurrentFrequency);
+                mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
                 scanDown.setEnabled(false);
             }
         });
 
         pause.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                updateReceiverState(mFmReceiver.getState() == FmReceiver.STATE_IDLE);
+                if (mService.isStarted())
+                    mService.stopRadio();
+                else
+                    mService.startRadio(mSelectedBand, mCurrentFrequency);
             }
         });
 
@@ -584,11 +333,13 @@ public class FmRadio extends Activity {
             favorite.setImageResource(R.drawable.favoritebutton);
         } else {
             // insert favorite
+            int offset = mService.getChannelOffset();
+            String freqFormatted = FmUtils.formatFrequency(offset, frequency);
             String freqString = "";
-            if (mStationNameTextView.getText() != "")
-                freqString = mStationNameTextView.getText() + " (" + formatFrequency(frequency) + ")";
-            else
-                freqString = formatFrequency(frequency);
+            if (mStationNameTextView.getText() != "") {
+                freqString = mStationNameTextView.getText() + " (" + freqFormatted + ")";
+            } else
+                freqString = freqFormatted;
             mMenuAdapter.add(new MenuTuple(frequency, freqString));
             // sort (ascending)
             mMenuAdapter.sort(new Comparator<MenuTuple>() {
@@ -673,14 +424,14 @@ public class FmRadio extends Activity {
                     default:
                         break;
                 }
-                mFmBand = new FmBand(mSelectedBand);
-                mCurrentFrequency = mFmBand.getDefaultFrequency();
-                updateReceiverState(false);
-                updateReceiverState(true);
+                mService.stopRadio();
+                mService.startRadio(mSelectedBand, 0);
                 break;
             case STATION_SELECTION_MENU:
                 int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
-                updateFrequency(freq, true);
+                if (!mService.isStarted())
+                    mService.startRadio(mSelectedBand, 0);
+                mService.changeFrequency(FmRadioService.SEEK_ABSOLUTE, freq);
                 break;
             default:
                 break;
