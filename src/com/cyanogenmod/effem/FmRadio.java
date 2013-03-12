@@ -70,6 +70,8 @@ public class FmRadio extends Activity
     private TextView mStationInfoTextView;
 
     // FM state
+    private HandlerThread mWorker;
+    private Handler mWorkerHandler;
     private FmRadioService mService;
 	private int mCurrentFrequency;
     private boolean mFirstStart = true;
@@ -97,6 +99,11 @@ public class FmRadio extends Activity
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
+        // worker thread for async execution of FM stuff
+        mWorker = new HandlerThread("EffemWorker");
+        mWorker.start();
+        mWorkerHandler = new Handler(mWorker.getLooper());
+
         // ui preparations
         setupButtons();
     }
@@ -121,7 +128,9 @@ public class FmRadio extends Activity
 
         // start radio on initial start
         if (mFirstStart) {
-            mService.startRadio(mSelectedBand, mCurrentFrequency);
+            mWorkerHandler.post(new Runnable() { public void run() {
+                mService.startRadio(mSelectedBand, mCurrentFrequency);
+            }});
             mFirstStart = false;
         }
         mService.resumeCallbacks();
@@ -158,6 +167,7 @@ public class FmRadio extends Activity
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        mWorker.quit();
 
         // save preferences
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
@@ -266,31 +276,41 @@ public class FmRadio extends Activity
         scanUp.setOnLongClickListener (new OnLongClickListener() {
             public boolean onLongClick(View v) {
                 scanUp.setEnabled(false);
-                mService.startRadio(mSelectedBand, mCurrentFrequency);
-                return mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
+                }});
+                return true;
             }
         });
 
         scanDown.setOnLongClickListener (new OnLongClickListener() {
             public boolean onLongClick(View v) {
                 scanDown.setEnabled(false);
-                mService.startRadio(mSelectedBand, mCurrentFrequency);
-                return mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
+                }});
+                return true;
             }
         });
 
         scanUp.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                mService.startRadio(mSelectedBand, mCurrentFrequency);
-                mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
+                }});
                 scanUp.setEnabled(false);
             }
         });
 
         scanDown.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                mService.startRadio(mSelectedBand, mCurrentFrequency);
-                mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
+                }});
                 scanDown.setEnabled(false);
             }
         });
@@ -299,8 +319,11 @@ public class FmRadio extends Activity
             public void onClick(View v) {
                 if (mService.isStarted())
                     mService.stopRadio();
-                else
-                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                else {
+                    mWorkerHandler.post(new Runnable() { public void run() {
+                        mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    }});
+                }
             }
         });
 
@@ -424,14 +447,19 @@ public class FmRadio extends Activity
                     default:
                         break;
                 }
-                mService.stopRadio();
-                mService.startRadio(mSelectedBand, 0);
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.stopRadio();
+                    mService.startRadio(mSelectedBand, 0);
+                }});
                 break;
             case STATION_SELECTION_MENU:
-                int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
-                if (!mService.isStarted())
-                    mService.startRadio(mSelectedBand, 0);
-                mService.changeFrequency(FmRadioService.SEEK_ABSOLUTE, freq);
+                final int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    if (!mService.isStarted())
+                        mService.startRadio(mSelectedBand, freq);
+                    else
+                        mService.changeFrequency(FmRadioService.SEEK_ABSOLUTE, freq);
+                }});
                 break;
             default:
                 break;

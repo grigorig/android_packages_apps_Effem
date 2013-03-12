@@ -241,8 +241,6 @@ public class FmRadioService extends Service {
             try {
                 registerReceiverCallbacks();
                 mFmReceiver.start(mFmBand);
-                // note: audio is initialized in the onStarted callback!
-                // the callback also calls an initial updateFrequency
                 updateAudioState(true);
                 if (mCurrentFrequency <= 0) {
                     mCurrentFrequency = mFmBand.getDefaultFrequency();
