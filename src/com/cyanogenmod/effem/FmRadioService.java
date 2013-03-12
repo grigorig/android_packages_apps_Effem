@@ -33,6 +33,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.BroadcastReceiver;
 import java.io.IOException;
 
 public class FmRadioService extends Service {
@@ -58,9 +59,11 @@ public class FmRadioService extends Service {
     private FmReceiver.OnScanListener mReceiverScanListener;
     private FmReceiver.OnRDSDataFoundListener mReceiverRdsDataFoundListener;
     private FmReceiver.OnStartedListener mReceiverStartedListener;
+    private BroadcastReceiver mHeadsetReceiver;
 
 	private int mCurrentFrequency;
     private boolean mCallbacksEnabled = false;
+    private boolean mHeadsetConnected = false;
 
     // Binder for direct access to local service
     private Binder mBinder = new LocalBinder();
@@ -100,11 +103,34 @@ public class FmRadioService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        // get service instances
         mFmReceiver = (FmReceiver)getSystemService("fm_receiver");
         mNotificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
-
         prepareNotification();
+
+        // listen for headset connection events
+        mHeadsetReceiver = new BroadcastReceiver() {
+            public void onReceive(Context ctx, Intent intent) {
+                int state = intent.getIntExtra("state", -1);
+                Log.i(LOG_TAG, "headset state is " + state);
+                mHeadsetConnected = state == 1;
+
+                // stop radio if headset disconnected
+                if (mHeadsetConnected == false && isStarted()) {
+                    Log.i(LOG_TAG, "stopping receiver");
+                    if (mCallbacksEnabled == false) {
+                        Log.i(LOG_TAG, "nothing to do, stopping service");
+                        stopSelf();
+                        updateReceiverState(false);
+                        // enter special state that allows the user to start up
+                        // the activity again from the notification area
+                        //startForeground(PLAY_NOTIFICATION, mNotificationInstance);
+                    } else {
+                        updateReceiverState(false);
+                    }
+                }
+            }
+        };
+        registerReceiver(mHeadsetReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
     }
 
     @Override
@@ -424,13 +450,21 @@ public class FmRadioService extends Service {
      *
      * @param band FmBand constant
      * @param frequency frequency in Khz
+     * @return success
      */
-    public void startRadio(int band, int frequency) {
+    public boolean startRadio(int band, int frequency) {
         Log.v(LOG_TAG, "startRadio");
+
+        if (mHeadsetConnected == false) {
+            FmUtils.showToast(this, mHandler, R.string.no_headset_error,
+                    Toast.LENGTH_LONG);
+            return false;
+        }
 
         mCurrentFrequency = frequency;
         mFmBand = new FmBand(band);
         updateReceiverState(true);
+        return true;
     }
 
     /**

@@ -278,7 +278,8 @@ public class FmRadio extends Activity
                 scanUp.setEnabled(false);
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.startRadio(mSelectedBand, mCurrentFrequency);
-                    mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
+                    if (mService.isStarted())
+                        mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
                 }});
                 return true;
             }
@@ -289,7 +290,8 @@ public class FmRadio extends Activity
                 scanDown.setEnabled(false);
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.startRadio(mSelectedBand, mCurrentFrequency);
-                    mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
+                    if (mService.isStarted())
+                        mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
                 }});
                 return true;
             }
@@ -299,7 +301,8 @@ public class FmRadio extends Activity
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.startRadio(mSelectedBand, mCurrentFrequency);
-                    mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
+                    if (mService.isStarted())
+                        mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
                 }});
                 scanUp.setEnabled(false);
             }
@@ -309,7 +312,8 @@ public class FmRadio extends Activity
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.startRadio(mSelectedBand, mCurrentFrequency);
-                    mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
+                    if (mService.isStarted())
+                        mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
                 }});
                 scanDown.setEnabled(false);
             }

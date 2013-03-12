@@ -17,6 +17,7 @@
 	<string name="resume_error">Kann nicht fortsetzen</string>
 	<string name="pause_error">Kann nicht pausieren</string>
 	<string name="busy_error">Beschäftigt, bitte später versuchen</string>
+    <string name="no_headset_error">Bitte Kopfhörer/Headset anschließen</string>
     <string-array name="pty_names">
         <item>Unbekannt</item>
         <item>Nachrichten</item>

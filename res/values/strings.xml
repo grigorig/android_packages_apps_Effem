@@ -17,6 +17,7 @@
 	<string name="resume_error">Unable to resume</string>
 	<string name="pause_error">Unable to pause</string>
 	<string name="busy_error">Busy, please try again</string>
+    <string name="no_headset_error">Please connect headphones/headset</string>
     <string-array name="pty_names">
         <item>Unknown</item>
         <item>News</item>
