@@ -135,21 +135,22 @@ public class FmRadioService extends Service {
 
     @Override
     public void onDestroy() {
-        updateReceiverState(false);
+        unregisterReceiver(mHeadsetReceiver);
         unregisterReceiverCallbacks();
+        updateReceiverState(false);
         super.onDestroy();
     }
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
-        mHandler = new Handler();
 		return Service.START_STICKY;
 	}
 
 	@Override
-	public IBinder onBind(Intent arg0) {
-		return mBinder;
-	}
+    public IBinder onBind(Intent arg0) {
+        mHandler = new Handler();
+        return mBinder;
+    }
 
     private void tryPost(Runnable run) {
         if (mHandler != null && mCallbacks != null) {
@@ -440,11 +441,6 @@ public class FmRadioService extends Service {
         }
     }
 
-    private void checkActive() {
-        if (isStarted() == false)
-            throw new IllegalStateException("Receiver not running");
-    }
-
     /**
      * Start radio with given band and frequency
      *
@@ -510,7 +506,10 @@ public class FmRadioService extends Service {
     public boolean changeFrequency(int mode, int frequency) {
         Log.v(LOG_TAG, "changeFrequency");
 
-        checkActive();
+        if (!isStarted() || !isReady()) {
+            Log.e(LOG_TAG, "radio not ready");
+            return false;
+        }
 
         switch (mode) {
         case SEEK_RESET:
@@ -559,17 +558,35 @@ public class FmRadioService extends Service {
     }
 
     /**
-     * Return whether radio is active and state is valid
+     * Return whether radio has been started
      *
      * @return radio state
      */
     public boolean isStarted() {
         return (mFmReceiver.getState() != FmReceiver.STATE_IDLE)
+                && (mFmReceiver.getState() != FmReceiver.STATE_STARTING)
                 && (mFmBand != null);
     }
 
+    /**
+     * Return whether radio is ready for executing a command
+     *
+     * @return command state
+     */
+    public boolean isReady() {
+        int state = mFmReceiver.getState();
+        return state != FmReceiver.STATE_SCANNING
+                && state != FmReceiver.STATE_STARTING;
+    }
+
+    /**
+     * Get channel offset of currently active band
+     *
+     * @return channel offset in KHz
+     */
     public int getChannelOffset() {
-        checkActive();
+        if (!isStarted())
+            return -1;
         return mFmBand.getChannelOffset();
     }
 }

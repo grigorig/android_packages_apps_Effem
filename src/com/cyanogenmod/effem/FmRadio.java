@@ -192,10 +192,15 @@ public class FmRadio extends Activity
         Log.i(LOG_TAG, "onReceiverStateChanged " + state);
 
         // switch button image for play/pause
-        if (state == true)
-            ((ImageButton) findViewById(R.id.Pause)).setImageResource(R.drawable.pausebutton);
-        else
-            ((ImageButton) findViewById(R.id.Pause)).setImageResource(R.drawable.playbutton);
+        ImageButton favorite = (ImageButton) findViewById(R.id.Favorite);
+        ImageButton pause    = (ImageButton) findViewById(R.id.Pause);
+        if (state == true) {
+            pause.setImageResource(R.drawable.pausebutton);
+            favorite.setEnabled(true);
+        } else {
+            pause.setImageResource(R.drawable.playbutton);
+            favorite.setEnabled(false);
+        }
     }
 
     @Override
