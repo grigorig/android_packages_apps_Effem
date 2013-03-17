@@ -368,7 +368,7 @@ public class FmRadio extends Activity
             int offset = mService.getChannelOffset();
             String freqFormatted = FmUtils.formatFrequency(offset, frequency);
             String freqString = "";
-            if (mStationNameTextView.getText() != "") {
+            if (mStationNameTextView.getText() != getText(R.string.no_rds)) {
                 freqString = mStationNameTextView.getText() + " (" + freqFormatted + ")";
             } else
                 freqString = freqFormatted;
@@ -394,10 +394,11 @@ public class FmRadio extends Activity
     public boolean onPrepareOptionsMenu(Menu menu) {
         menu.clear();
         boolean result = super.onCreateOptionsMenu(menu);
+
+        // Create and populate the band selection menu
         SubMenu subMenu = menu.addSubMenu(BASE_OPTION_MENU, FM_BAND, Menu.NONE,
                 R.string.band_select);
         subMenu.setIcon(android.R.drawable.ic_menu_mapmode);
-        // Populate the band selection menu
         subMenu.add(BAND_SELECTION_MENU, BAND_US, Menu.NONE, R.string.band_us);
         subMenu.add(BAND_SELECTION_MENU, BAND_EU, Menu.NONE, R.string.band_eu);
         subMenu.add(BAND_SELECTION_MENU, BAND_JAPAN, Menu.NONE, R.string.band_ja);
@@ -405,13 +406,12 @@ public class FmRadio extends Activity
         subMenu.setGroupCheckable(BAND_SELECTION_MENU, true, true);
         subMenu.getItem(mSelectedBand).setChecked(true);
 
+        // Create the station select menu
         subMenu = menu.addSubMenu(BASE_OPTION_MENU, STATION_SELECT, Menu.NONE,
                 R.string.station_select);
-        subMenu.setIcon(android.R.drawable.ic_menu_more);
         subMenu.getItem().setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
 
-        // Dynamically populate the station select menu each time the option
-        // button is pushed
+        // Dynamically populate the station select menu
         if (mMenuAdapter.isEmpty()) {
             subMenu.setGroupEnabled(STATION_SELECTION_MENU, false);
         } else {
