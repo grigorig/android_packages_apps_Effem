@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Effem</string>
+    <string name="band_select">Seleccionar Banda</string>
+    <string name="band_us">USA</string>
+    <string name="band_eu">Europa</string>
+    <string name="band_ja">Japão</string>
+    <string name="band_ch">China</string>
+    <string name="station_select">Seleccionar Estação</string>
+    <string name="fmradio">FM RADIO</string>
+    <string name="dashes">- - - -</string>
+    <string name="no_rds">SEM RDS</string>
+    <string name="no_stations">Sem estações guardadas</string>
+    <string name="scan_error">Não é possível iniciar a procura</string>
+    <string name="fm_start_error">Não é possível iniciar o receptor de rádio</string>
+    <string name="seek_error">Incapaz de procurar estações</string>
+    <string name="resume_error">Incapaz de resumir</string>
+    <string name="pause_error">Incapaz de pausar</string>
+    <string name="busy_error">Ocupadado, por favor tente mais tarde</string>
+    <string name="no_headset_error">Por favor connecte os headphones/headset</string>
+    <string-array name="pty_names">
+        <item>Desconhecido</item>
+        <item>Notícias</item>
+        <item>Assuntos actuais</item>
+        <item>Informação</item>
+        <item>Desporto</item>
+        <item>Educação</item>
+        <item>Drama</item>
+        <item>Cultura</item>
+        <item>Ciência</item>
+        <item>Variado</item>
+        <item>Pop</item>
+        <item>Rock</item>
+        <item>Música Ligeira</item>
+        <item>Clássica Ligeira</item>
+        <item>Música clássica</item>
+        <item>Outra música</item>
+        <item>Meteorologia</item>
+        <item>Finanças</item>
+        <item>Crianças</item>
+        <item>Assuntos sociais</item>
+        <item>Religião</item>
+        <item>Discos pedidos</item>
+        <item>Viagens</item>
+        <item>Lazer</item>
+        <item>Jazz</item>
+        <item>Country</item>
+        <item>Nacional</item>
+        <item>Oldies</item>
+        <item>Folk</item>
+        <item>Documentário</item>
+        <item>Teste de Alarme</item>
+        <item>Alarme</item>
+    </string-array>
+</resources>
