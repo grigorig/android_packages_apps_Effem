@@ -61,7 +61,7 @@ public class FmRadioService extends Service {
     private FmReceiver.OnStartedListener mReceiverStartedListener;
     private BroadcastReceiver mHeadsetReceiver;
 
-	private int mCurrentFrequency;
+    private int mCurrentFrequency;
     private boolean mCallbacksEnabled = false;
     private boolean mHeadsetConnected = false;
 
@@ -141,12 +141,12 @@ public class FmRadioService extends Service {
         super.onDestroy();
     }
 
-	@Override
-	public int onStartCommand(Intent intent, int flags, int startId) {
-		return Service.START_STICKY;
-	}
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return Service.START_STICKY;
+    }
 
-	@Override
+    @Override
     public IBinder onBind(Intent arg0) {
         mHandler = new Handler();
         return mBinder;
@@ -189,7 +189,7 @@ public class FmRadioService extends Service {
                 if (rdsData.containsKey("PSN")) {
                     setNotification(rdsData.getString("PSN").trim(), mCurrentFrequency);
                 }
-                
+
             }
         };
 
@@ -431,12 +431,12 @@ public class FmRadioService extends Service {
         if (stationName != null && frequency > 0) {
             mRadioNotification.setContentTitle(stationName)
                 .setContentText(freqFormatted + " MHz");
-            mNotificationInstance = mRadioNotification.build();
+            mNotificationInstance = mRadioNotification.getNotification();
             mNotificationManager.notify(PLAY_NOTIFICATION, mNotificationInstance);
         } else if (frequency > 0) {
             mRadioNotification.setContentTitle(freqFormatted + " MHz")
                 .setContentText("");
-            mNotificationInstance = mRadioNotification.build();
+            mNotificationInstance = mRadioNotification.getNotification();
             mNotificationManager.notify(PLAY_NOTIFICATION, mNotificationInstance);
         }
     }
