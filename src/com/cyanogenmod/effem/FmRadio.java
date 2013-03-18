@@ -288,9 +288,7 @@ public class FmRadio extends Activity
             public boolean onLongClick(View v) {
                 scanUp.setEnabled(false);
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency);
-                    if (mService.isStarted())
-                        mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
+                    mService.changeFrequency(FmRadioService.SEEK_STEPUP, 0);
                 }});
                 return true;
             }
@@ -300,9 +298,7 @@ public class FmRadio extends Activity
             public boolean onLongClick(View v) {
                 scanDown.setEnabled(false);
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency);
-                    if (mService.isStarted())
-                        mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
+                    mService.changeFrequency(FmRadioService.SEEK_STEPDOWN, 0);
                 }});
                 return true;
             }
