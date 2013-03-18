@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Effem</string>
-    <string name="band_select">Bant Seç</string>
+    <string name="band_select">Bant Seçimi</string>
     <string name="band_us">ABD</string>
     <string name="band_eu">Avrupa</string>
     <string name="band_ja">Japonya</string>
     <string name="band_ch">Çin</string>
     <string name="station_select">İstasyon Seç</string>
+    <string name="output_select">Ses Çıkışı</string>
+    <string name="output_select_default">Kulaklık</string>
+    <string name="output_select_loudspeaker">Hoparlör</string>
     <string name="fmradio">FM RADYO</string>
     <string name="dashes">- - - -</string>
     <string name="no_rds">RDS yok</string>

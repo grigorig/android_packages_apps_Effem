@@ -49,6 +49,10 @@ public class FmRadioService extends Service {
     static final int SEEK_STEPUP   = 4;
     static final int SEEK_STEPDOWN = 5;
 
+    // audio output devices
+    static final int AUDIO_DEFAULT = 0;
+    static final int AUDIO_SPEAKER = 1;
+
     private Handler mHandler;
     private MediaPlayer mMediaPlayer;
     private FmBand mFmBand;
@@ -62,6 +66,7 @@ public class FmRadioService extends Service {
     private BroadcastReceiver mHeadsetReceiver;
 
     private int mCurrentFrequency;
+    private int mAudioOutput = 0;
     private boolean mCallbacksEnabled = false;
     private boolean mHeadsetConnected = false;
 
@@ -243,9 +248,10 @@ public class FmRadioService extends Service {
                 mMediaPlayer.setDataSource("fmradio://rx");
                 mMediaPlayer.prepare();
                 mMediaPlayer.start();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 // fall back to legacy audio routing
                 mMediaPlayer = null;
+                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, getAudioOutput());
                 AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
                 AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
             }
@@ -254,6 +260,7 @@ public class FmRadioService extends Service {
                 mMediaPlayer.release();
                 mMediaPlayer = null;
             }
+            AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
         }
     }
@@ -447,9 +454,10 @@ public class FmRadioService extends Service {
      *
      * @param band FmBand constant
      * @param frequency frequency in Khz
+     * @param output headset/speaker
      * @return success
      */
-    public boolean startRadio(int band, int frequency) {
+    public boolean startRadio(int band, int frequency, int output) {
         Log.v(LOG_TAG, "startRadio");
 
         if (mHeadsetConnected == false) {
@@ -459,6 +467,7 @@ public class FmRadioService extends Service {
         }
 
         mCurrentFrequency = frequency;
+        mAudioOutput = output;
         mFmBand = new FmBand(band);
         updateReceiverState(true);
         return true;
@@ -589,5 +598,17 @@ public class FmRadioService extends Service {
         if (!isStarted())
             return -1;
         return mFmBand.getChannelOffset();
+    }
+
+    /**
+     * Get current audio output device
+     *
+     * @return output device as AudioSystem.FORCE_* constant
+     */
+    public int getAudioOutput() {
+        switch (mAudioOutput) {
+            case AUDIO_SPEAKER: return AudioSystem.FORCE_SPEAKER;
+            default:            return AudioSystem.FORCE_NONE;
+        }
     }
 }

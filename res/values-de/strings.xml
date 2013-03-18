@@ -7,6 +7,9 @@
     <string name="band_ja">Japan</string>
     <string name="band_ch">China</string>
     <string name="station_select">Station wählen</string>
+    <string name="output_select">Audioausgabe</string>
+    <string name="output_select_default">Automatisch</string>
+    <string name="output_select_loudspeaker">Lautsprecher</string>
     <string name="fmradio">FM RADIO</string>
     <string name="dashes">- - - -</string>
     <string name="no_rds">KEIN RDS</string>
