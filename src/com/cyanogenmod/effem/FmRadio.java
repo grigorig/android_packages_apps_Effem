@@ -55,14 +55,22 @@ public class FmRadio extends Activity
     // Menu identifiers
     private static final int BASE_OPTION_MENU = 0;
     private static final int BAND_SELECTION_MENU = 1;
-    private static final int STATION_SELECTION_MENU = 2;
+    private static final int LOUDSPEAKER_SELECTION_MENU = 2;
+    private static final int STATION_SELECTION_MENU = 3;
+
     public static final int FM_BAND = Menu.FIRST;
     public static final int BAND_US = Menu.FIRST + 1;
     public static final int BAND_EU = Menu.FIRST + 2;
     public static final int BAND_JAPAN = Menu.FIRST + 3;
     public static final int BAND_CHINA = Menu.FIRST + 4;
-    public static final int STATION_SELECT = Menu.FIRST + 5;
+    public static final int OUTPUT_SOUND = Menu.FIRST + 5;
+    public static final int OUTPUT_HEADSET = Menu.FIRST + 6;
+    public static final int OUTPUT_SPEAKER = Menu.FIRST + 7;
+    public static final int STATION_SELECT = Menu.FIRST + 8;
     public static final int STATION_SELECT_MENU_ITEMS = STATION_SELECT + 1;
+
+    // Application context
+    private Context context;
 
     // Views for frequency, station name, program type and radio text
     private TextView mFrequencyTextView;
@@ -77,6 +85,7 @@ public class FmRadio extends Activity
     private int mCurrentFrequency;
     private boolean mFirstStart = true;
     private int mSelectedBand;
+    private int mSelectedOutput;
 
     // Array of the available stations in MHz
     private ArrayAdapter<MenuTuple> mMenuAdapter;
@@ -89,12 +98,16 @@ public class FmRadio extends Activity
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
+        context = getApplicationContext();
         setContentView(R.layout.main);
 
         // restore preferences
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         mSelectedBand = settings.getInt("selectedBand", 1);
         mCurrentFrequency = settings.getInt("currentFrequency", 0);
+        if (context.getResources().getBoolean(R.bool.speaker_supported)) {
+            mSelectedOutput = settings.getInt("selectedOutput", 0) > 0 ? 1 : 0;
+        }
 
         // misc setup
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
@@ -130,7 +143,7 @@ public class FmRadio extends Activity
         // start radio on initial start
         if (mFirstStart) {
             mWorkerHandler.post(new Runnable() { public void run() {
-                mService.startRadio(mSelectedBand, mCurrentFrequency);
+                mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
             }});
             mFirstStart = false;
         }
@@ -175,6 +188,9 @@ public class FmRadio extends Activity
         SharedPreferences.Editor editor = settings.edit();
         editor.putInt("selectedBand", mSelectedBand);
         editor.putInt("currentFrequency", mCurrentFrequency);
+        if (context.getResources().getBoolean(R.bool.speaker_supported)) {
+            editor.putInt("selectedOutput", mSelectedOutput);
+        }
         try {
             JSONObject conf = new JSONObject();
             JSONArray stations = new JSONArray();
@@ -307,7 +323,7 @@ public class FmRadio extends Activity
         scanUp.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
                     if (mService.isStarted())
                         mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
                 }});
@@ -318,7 +334,7 @@ public class FmRadio extends Activity
         scanDown.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency);
+                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
                     if (mService.isStarted())
                         mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
                 }});
@@ -332,7 +348,7 @@ public class FmRadio extends Activity
                     mService.stopRadio();
                 else {
                     mWorkerHandler.post(new Runnable() { public void run() {
-                        mService.startRadio(mSelectedBand, mCurrentFrequency);
+                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
                     }});
                 }
             }
@@ -408,6 +424,19 @@ public class FmRadio extends Activity
         subMenu.setGroupCheckable(BAND_SELECTION_MENU, true, true);
         subMenu.getItem(mSelectedBand).setChecked(true);
 
+        // Create and populate the speaker/headset selection menu if speaker supported
+        if (context.getResources().getBoolean(R.bool.speaker_supported)) {
+            subMenu = menu.addSubMenu(BASE_OPTION_MENU, OUTPUT_SOUND, Menu.NONE,
+                R.string.output_select);
+            subMenu.setIcon(android.R.drawable.ic_menu_mapmode);
+            subMenu.add(LOUDSPEAKER_SELECTION_MENU, OUTPUT_HEADSET, Menu.NONE,
+                R.string.output_select_headset);
+            subMenu.add(LOUDSPEAKER_SELECTION_MENU, OUTPUT_SPEAKER, Menu.NONE,
+                R.string.output_select_loudspeaker);
+            subMenu.setGroupCheckable(LOUDSPEAKER_SELECTION_MENU, true, true);
+            subMenu.getItem(mSelectedOutput).setChecked(true);
+        }
+
         // Create the station select menu
         subMenu = menu.addSubMenu(BASE_OPTION_MENU, STATION_SELECT, Menu.NONE,
                 R.string.station_select);
@@ -460,14 +489,23 @@ public class FmRadio extends Activity
                 }
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.stopRadio();
-                    mService.startRadio(mSelectedBand, 0);
+                    mService.startRadio(mSelectedBand, 0, mSelectedOutput);
                 }});
                 break;
+
+            case LOUDSPEAKER_SELECTION_MENU:
+                mSelectedOutput = (item.getItemId() == OUTPUT_HEADSET) ? 0 : 1;
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.stopRadio();
+                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                }});
+                break;
+
             case STATION_SELECTION_MENU:
                 final int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
                 mWorkerHandler.post(new Runnable() { public void run() {
                     if (!mService.isStarted())
-                        mService.startRadio(mSelectedBand, freq);
+                        mService.startRadio(mSelectedBand, freq, mSelectedOutput);
                     else
                         mService.changeFrequency(FmRadioService.SEEK_ABSOLUTE, freq);
                 }});

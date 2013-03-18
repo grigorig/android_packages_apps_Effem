@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Effem</string>
-    <string name="band_select">Select Band</string>
+    <string name="band_select">Band Selection</string>
     <string name="band_us">US</string>
     <string name="band_eu">Europe</string>
     <string name="band_ja">Japan</string>
     <string name="band_ch">China</string>
     <string name="station_select">Select Station</string>
+    <string name="output_select">Sound Output</string>
+    <string name="output_select_headset">Headset</string>
+    <string name="output_select_loudspeaker">Loudspeaker</string>
     <string name="fmradio">FM RADIO</string>
     <string name="dashes">- - - -</string>
     <string name="no_rds">NO RDS</string>
