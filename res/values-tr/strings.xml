@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Effem</string>
+    <string name="band_select">Bant Seç</string>
+    <string name="band_us">ABD</string>
+    <string name="band_eu">Avrupa</string>
+    <string name="band_ja">Japonya</string>
+    <string name="band_ch">Çin</string>
+    <string name="station_select">İstasyon Seç</string>
+    <string name="fmradio">FM RADYO</string>
+    <string name="dashes">- - - -</string>
+    <string name="no_rds">RDS yok</string>
+    <string name="no_stations">İstasyon kaydedilmedi</string>
+    <string name="scan_error">Tarama başlatılamıyor</string>
+    <string name="fm_start_error">Radyo alıcısı başlatılamıyor</string>
+    <string name="seek_error">Aranamıyor</string>
+    <string name="resume_error">Devam edilemiyor</string>
+    <string name="pause_error">Bekletilemiyor</string>
+    <string name="busy_error">Meşgul, daha sonra tekrar deneyin</string>
+    <string name="no_headset_error">Lütfen kulaklığı takın</string>
+    <string-array name="pty_names">
+        <item>Bilinmiyor</item>
+        <item>Haberler</item>
+        <item>Güncel olaylar</item>
+        <item>Bilgi</item>
+        <item>Spor</item>
+        <item>Eğitim</item>
+        <item>Drama</item>
+        <item>Kültür</item>
+        <item>Bilim</item>
+        <item>Çeşitli</item>
+        <item>Pop</item>
+        <item>Rak müzik</item>
+        <item>Hafif müzik</item>
+        <item>Hafif klasik</item>
+        <item>Gerçek klasik</item>
+        <item>Diğer müzik</item>
+        <item>Hava</item>
+        <item>Finans</item>
+        <item>Çocuk</item>
+        <item>Sosyal olaylar</item>
+        <item>Dinsel</item>
+        <item>Telefonda</item>
+        <item>Seyahat</item>
+        <item>Serbest</item>
+        <item>Caz</item>
+        <item>Küresel</item>
+        <item>Ulusal</item>
+        <item>Eskiler</item>
+        <item>Halk</item>
+        <item>Belgesel</item>
+        <item>Alarm denemesi</item>
+        <item>Alarm</item>
+    </string-array>
+</resources>
