@@ -62,6 +62,7 @@ public class FmRadioService extends Service {
     private BroadcastReceiver mHeadsetReceiver;
 
     private int mCurrentFrequency;
+    private int mDefaultOutput = 0; // 0=headset, 1=speaker
     private boolean mCallbacksEnabled = false;
     private boolean mHeadsetConnected = false;
 
@@ -243,9 +244,10 @@ public class FmRadioService extends Service {
                 mMediaPlayer.setDataSource("fmradio://rx");
                 mMediaPlayer.prepare();
                 mMediaPlayer.start();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 // fall back to legacy audio routing
                 mMediaPlayer = null;
+                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, (mDefaultOutput == 1) ? AudioSystem.FORCE_SPEAKER : AudioSystem.FORCE_NONE);
                 AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
                 AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_AVAILABLE, "");
             }
@@ -254,6 +256,7 @@ public class FmRadioService extends Service {
                 mMediaPlayer.release();
                 mMediaPlayer = null;
             }
+            AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
             AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM, AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
         }
     }
@@ -447,9 +450,10 @@ public class FmRadioService extends Service {
      *
      * @param band FmBand constant
      * @param frequency frequency in Khz
+     * @param output headset/speaker
      * @return success
      */
-    public boolean startRadio(int band, int frequency) {
+    public boolean startRadio(int band, int frequency, int output) {
         Log.v(LOG_TAG, "startRadio");
 
         if (mHeadsetConnected == false) {
@@ -459,6 +463,7 @@ public class FmRadioService extends Service {
         }
 
         mCurrentFrequency = frequency;
+        mDefaultOutput = output;
         mFmBand = new FmBand(band);
         updateReceiverState(true);
         return true;
