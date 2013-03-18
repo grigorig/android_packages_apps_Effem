@@ -40,6 +40,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.ComponentName;
+import android.graphics.Typeface;
 
 import java.io.IOException;
 import java.util.Comparator;
@@ -277,6 +278,11 @@ public class FmRadio extends Activity
         final ImageButton pause = (ImageButton) findViewById(R.id.Pause);
         final ImageButton favorite = (ImageButton) findViewById(R.id.Favorite);
         mStationInfoTextView.setSelected(true);
+
+        // set typeface for station frequency widget
+        // this is done here instead of layout xml to keep ICS compatibility
+        mFrequencyTextView.setTypeface(Typeface.create("sans-serif-light",
+                Typeface.NORMAL));
 
         scanUp.setOnLongClickListener (new OnLongClickListener() {
             public boolean onLongClick(View v) {

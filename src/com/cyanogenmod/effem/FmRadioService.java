@@ -432,12 +432,12 @@ public class FmRadioService extends Service {
         if (stationName != null && frequency > 0) {
             mRadioNotification.setContentTitle(stationName)
                 .setContentText(freqFormatted + " MHz");
-            mNotificationInstance = mRadioNotification.build();
+            mNotificationInstance = mRadioNotification.getNotification();
             mNotificationManager.notify(PLAY_NOTIFICATION, mNotificationInstance);
         } else if (frequency > 0) {
             mRadioNotification.setContentTitle(freqFormatted + " MHz")
                 .setContentText("");
-            mNotificationInstance = mRadioNotification.build();
+            mNotificationInstance = mRadioNotification.getNotification();
             mNotificationManager.notify(PLAY_NOTIFICATION, mNotificationInstance);
         }
     }

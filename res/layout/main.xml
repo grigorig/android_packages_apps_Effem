@@ -25,7 +25,7 @@
         </LinearLayout>
 
         <!-- frequency -->
-        <TextView android:layout_width="fill_parent" android:fontFamily="sans-serif-light"
+        <TextView android:layout_width="fill_parent"
             android:layout_height="wrap_content" android:id="@+id/FrequencyTextView"
             android:lines="1" android:textSize="105dp" android:gravity="center"
             android:text="@string/dashes" android:includeFontPadding="false"></TextView>
