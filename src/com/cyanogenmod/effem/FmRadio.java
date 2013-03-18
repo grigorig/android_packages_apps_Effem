@@ -73,7 +73,7 @@ public class FmRadio extends Activity
     private HandlerThread mWorker;
     private Handler mWorkerHandler;
     private FmRadioService mService;
-	private int mCurrentFrequency;
+    private int mCurrentFrequency;
     private boolean mFirstStart = true;
     private int mSelectedBand;
 
@@ -97,7 +97,7 @@ public class FmRadio extends Activity
 
         // misc setup
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
-		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
         // worker thread for async execution of FM stuff
         mWorker = new HandlerThread("EffemWorker");

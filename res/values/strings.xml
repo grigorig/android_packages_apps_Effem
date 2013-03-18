@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name">Effem</string>
-	<string name="band_select">Select Band</string>
-	<string name="band_us">US</string>
-	<string name="band_eu">Europe</string>
-	<string name="band_ja">Japan</string>
-	<string name="band_ch">China</string>
-	<string name="station_select">Select Station</string>
-	<string name="fmradio">FM RADIO</string>
-	<string name="dashes">- - - -</string>
-	<string name="no_rds">NO RDS</string>
-	<string name="no_stations">No stations saved</string>
-	<string name="scan_error">Unable to start scan</string>
-	<string name="fm_start_error">Unable to start radio receiver</string>
-	<string name="seek_error">Unable to seek</string>
-	<string name="resume_error">Unable to resume</string>
-	<string name="pause_error">Unable to pause</string>
-	<string name="busy_error">Busy, please try again</string>
+    <string name="app_name">Effem</string>
+    <string name="band_select">Select Band</string>
+    <string name="band_us">US</string>
+    <string name="band_eu">Europe</string>
+    <string name="band_ja">Japan</string>
+    <string name="band_ch">China</string>
+    <string name="station_select">Select Station</string>
+    <string name="fmradio">FM RADIO</string>
+    <string name="dashes">- - - -</string>
+    <string name="no_rds">NO RDS</string>
+    <string name="no_stations">No stations saved</string>
+    <string name="scan_error">Unable to start scan</string>
+    <string name="fm_start_error">Unable to start radio receiver</string>
+    <string name="seek_error">Unable to seek</string>
+    <string name="resume_error">Unable to resume</string>
+    <string name="pause_error">Unable to pause</string>
+    <string name="busy_error">Busy, please try again</string>
     <string name="no_headset_error">Please connect headphones/headset</string>
     <string-array name="pty_names">
         <item>Unknown</item>
