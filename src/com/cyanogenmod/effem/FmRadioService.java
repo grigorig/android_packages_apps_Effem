@@ -20,6 +20,8 @@ package com.cyanogenmod.effem;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
+import android.media.AudioManager;
+import android.media.AudioManager.OnAudioFocusChangeListener;
 import android.os.*;
 import android.util.Log;
 import android.widget.Toast;
@@ -36,7 +38,8 @@ import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
 import java.io.IOException;
 
-public class FmRadioService extends Service {
+public class FmRadioService extends Service
+        implements AudioManager.OnAudioFocusChangeListener {
     // various constants
     static final String LOG_TAG = "EffemService";
     static final int PLAY_NOTIFICATION = 1;
@@ -60,6 +63,7 @@ public class FmRadioService extends Service {
     private Notification.Builder mRadioNotification;
     private Notification mNotificationInstance;
     private NotificationManager mNotificationManager;
+    private AudioManager mAudioManager;
     private FmReceiver.OnScanListener mReceiverScanListener;
     private FmReceiver.OnRDSDataFoundListener mReceiverRdsDataFoundListener;
     private FmReceiver.OnStartedListener mReceiverStartedListener;
@@ -110,6 +114,7 @@ public class FmRadioService extends Service {
 
         mFmReceiver = (FmReceiver)getSystemService("fm_receiver");
         mNotificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        mAudioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
         prepareNotification();
 
         // listen for headset connection events
@@ -136,6 +141,24 @@ public class FmRadioService extends Service {
             }
         };
         registerReceiver(mHeadsetReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
+    }
+
+
+    @Override
+    public void onAudioFocusChange(int focus) {
+        switch (focus) {
+            case AudioManager.AUDIOFOCUS_LOSS:
+                updateReceiverState(false);
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                updatePlayState(false);
+                break;
+            case AudioManager.AUDIOFOCUS_GAIN:
+                updatePlayState(true);
+                break;
+            default:
+                Log.e(LOG_TAG, "unknown audio focus change: " + focus);
+        }
     }
 
     @Override
@@ -287,6 +310,8 @@ public class FmRadioService extends Service {
                     }
                 });
                 updateFrequency(mCurrentFrequency, true);
+                mAudioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC,
+                        AudioManager.AUDIOFOCUS_GAIN);
                 startForeground(PLAY_NOTIFICATION, mNotificationInstance);
             } catch (IOException e) {
                 Log.e(LOG_TAG, e.toString());
@@ -307,6 +332,7 @@ public class FmRadioService extends Service {
                         mCallbacks.onReceiverStateChanged(false);
                     }
                 });
+                mAudioManager.abandonAudioFocus(this);
                 stopForeground(true);
                 //mNotificationManager.cancel(PLAY_NOTIFICATION);
             } catch (IOException e) {
