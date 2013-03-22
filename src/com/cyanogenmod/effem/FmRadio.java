@@ -126,8 +126,9 @@ public class FmRadio extends Activity
      * Starts up the listeners and the FM radio if it isn't already active
      */
     @Override
-    protected void onStart() {
-        super.onStart();
+    protected void onResume() {
+        super.onResume();
+        Log.i(LOG_TAG, "onResume");
 
         // start and bind to service
         startService(new Intent(this, FmRadioService.class));
@@ -138,16 +139,14 @@ public class FmRadio extends Activity
     @Override
     public void onServiceConnected(ComponentName component, IBinder binder) {
         mService = ((FmRadioService.LocalBinder)binder).getService();
-        mService.setCallbacks(this);
-
         // start radio on initial start
-        if (mFirstStart) {
-            mWorkerHandler.post(new Runnable() { public void run() {
-                mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
-            }});
-            mFirstStart = false;
-        }
-        mService.resumeCallbacks();
+        mWorkerHandler.post(new Runnable() { public void run() {
+                if (mFirstStart)
+                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                mService.resumeCallbacks();
+                mService.setCallbacks(FmRadio.this);
+                }});
+        mFirstStart = false;
     }
 
     @Override
@@ -156,22 +155,23 @@ public class FmRadio extends Activity
     }
 
     /**
-     * Stops the FM Radio listeners
+     * Stops the FM Radio listeners and unbinds/stops service
      */
     @Override
-    protected void onStop() {
-        super.onStop();
+    protected void onPause() {
+        super.onPause();
+        Log.i(LOG_TAG, "onPause");
 
         // suspend callbacks to save power
         // especially, this will disable RDS
         mService.suspendCallbacks();
 
-        // unbind from service
-        unbindService(this);
-
         // if no playback is going on, the service can exit
         if (mService.isStarted() == false)
             stopService(new Intent(this, FmRadioService.class));
+
+        // unbind from service
+        unbindService(this);
     }
 
     /**

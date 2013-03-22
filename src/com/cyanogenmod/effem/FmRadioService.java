@@ -143,7 +143,6 @@ public class FmRadioService extends Service
         registerReceiver(mHeadsetReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
     }
 
-
     @Override
     public void onAudioFocusChange(int focus) {
         switch (focus) {
@@ -178,6 +177,18 @@ public class FmRadioService extends Service
     public IBinder onBind(Intent arg0) {
         mHandler = new Handler();
         return mBinder;
+    }
+
+    @Override
+    public void onRebind(Intent arg0) {
+        mHandler = new Handler();
+    }
+
+    @Override
+    public boolean onUnbind(Intent arg0) {
+        unregisterReceiverCallbacks();
+        mHandler = null;
+        return true;
     }
 
     private void tryPost(Runnable run) {
