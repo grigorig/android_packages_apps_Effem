@@ -18,12 +18,19 @@
 package com.cyanogenmod.effem;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.content.BroadcastReceiver;
 import android.content.pm.ActivityInfo;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.os.*;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
@@ -56,17 +63,31 @@ public class FmRadio extends Activity
     private static final int BASE_OPTION_MENU = 0;
     private static final int BAND_SELECTION_MENU = 1;
     private static final int LOUDSPEAKER_SELECTION_MENU = 2;
-    private static final int STATION_SELECTION_MENU = 3;
+    private static final int BT_EXIT_BEHAVIOUR_SELECTION_MENU = 3;
+    private static final int HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU = 4;
+    private static final int STATION_SELECTION_MENU = 5;
 
     public static final int FM_BAND = Menu.FIRST;
     public static final int BAND_US = Menu.FIRST + 1;
     public static final int BAND_EU = Menu.FIRST + 2;
     public static final int BAND_JAPAN = Menu.FIRST + 3;
     public static final int BAND_CHINA = Menu.FIRST + 4;
+
     public static final int OUTPUT_SOUND = Menu.FIRST + 5;
     public static final int OUTPUT_HEADSET = Menu.FIRST + 6;
     public static final int OUTPUT_SPEAKER = Menu.FIRST + 7;
-    public static final int STATION_SELECT = Menu.FIRST + 8;
+
+    public static final int BT_EXIT_BEHAVIOUR = Menu.FIRST + 8;
+    public static final int BT_EXIT_BEHAVIOUR_DONOTHING = Menu.FIRST + 9;
+    public static final int BT_EXIT_BEHAVIOUR_RESTOREINITIALBTSTATE = Menu.FIRST + 10;
+    public static final int BT_EXIT_BEHAVIOUR_PROMPT = Menu.FIRST + 11;
+    public static final int BT_EXIT_BEHAVIOUR_ALWAYSDISABLE = Menu.FIRST + 12;
+
+    public static final int HEADSET_EXIT_BEHAVIOUR = Menu.FIRST + 13;
+    public static final int HEADSET_EXIT_BEHAVIOUR_OFF = Menu.FIRST + 14;
+    public static final int HEADSET_EXIT_BEHAVIOUR_ON = Menu.FIRST + 15;
+
+    public static final int STATION_SELECT = Menu.FIRST + 16;
     public static final int STATION_SELECT_MENU_ITEMS = STATION_SELECT + 1;
 
     // Application context
@@ -86,6 +107,30 @@ public class FmRadio extends Activity
     private boolean mFirstStart = true;
     private int mSelectedBand;
     private int mSelectedOutput;
+
+    // BT
+    private int mBluetoothExitBehaviour = 0;
+    private int mHeadsetBehaviour = 0;
+    private boolean mBluetoothEnabled = false;
+    private boolean mInitialBtState = false;
+    private ProgressDialog mBluetoothStartingDialog;
+
+    private BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                mBluetoothEnabled = (state == BluetoothAdapter.STATE_ON);
+                if (!mBluetoothEnabled) {
+                    // Bluetooth is disabled so we should turn off FM too.
+                    if (mService != null) {
+                        mService.stopRadio();
+                    }
+                }
+            }
+        }
+    };
 
     // Array of the available stations in MHz
     private ArrayAdapter<MenuTuple> mMenuAdapter;
@@ -108,10 +153,21 @@ public class FmRadio extends Activity
         if (context.getResources().getBoolean(R.bool.speaker_supported)) {
             mSelectedOutput = settings.getInt("selectedOutput", 0) > 0 ? 1 : 0;
         }
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            mBluetoothExitBehaviour = settings.getInt("bluetoothExitBehaviour", 0);
+            mHeadsetBehaviour = settings.getInt("headsetBehaviour", 0);
+        }
 
         // misc setup
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
+        // BT
+        if (getResources().getBoolean(R.bool.require_bt)) {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+            registerReceiver(mIntentReceiver, filter);
+        }
 
         // worker thread for async execution of FM stuff
         mWorker = new HandlerThread("EffemWorker");
@@ -141,8 +197,12 @@ public class FmRadio extends Activity
         mService = ((FmRadioService.LocalBinder)binder).getService();
         // start radio on initial start
         mWorkerHandler.post(new Runnable() { public void run() {
-                if (mFirstStart)
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+		if (context.getResources().getBoolean(R.bool.require_bt)) {
+			asyncCheckAndEnableRadio();
+		} else {
+                    if (mFirstStart)
+                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                }
                 mService.resumeCallbacks();
                 mService.setCallbacks(FmRadio.this);
                 }});
@@ -152,6 +212,10 @@ public class FmRadio extends Activity
     @Override
     public void onServiceDisconnected(ComponentName component) {
         mService = null;
+
+        if (mHeadsetBehaviour > 0) {
+            toggleRadioOffBluetoothExitBehaviour();
+        }
     }
 
     /**
@@ -167,7 +231,7 @@ public class FmRadio extends Activity
         mService.suspendCallbacks();
 
         // if no playback is going on, the service can exit
-        if (mService.isStarted() == false)
+        if (!mService.isStarted())
             stopService(new Intent(this, FmRadioService.class));
 
         // unbind from service
@@ -191,6 +255,10 @@ public class FmRadio extends Activity
         if (context.getResources().getBoolean(R.bool.speaker_supported)) {
             editor.putInt("selectedOutput", mSelectedOutput);
         }
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            editor.putInt("bluetoothExitBehaviour", mBluetoothExitBehaviour);
+            editor.putInt("headsetBehaviour", mHeadsetBehaviour);
+        }
         try {
             JSONObject conf = new JSONObject();
             JSONArray stations = new JSONArray();
@@ -202,6 +270,17 @@ public class FmRadio extends Activity
             Log.e(LOG_TAG, "Failed to save station list");
         }
         editor.commit();
+
+        // Toggle BT on/off depending on value in preferences
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            toggleRadioOffBluetoothExitBehaviour();
+        }
+
+        // Unregister BT receiver
+        if (mIntentReceiver != null && getResources().getBoolean(R.bool.require_bt)) {
+            unregisterReceiver(mIntentReceiver);
+            mIntentReceiver = null;
+        }
     }
 
     @Override
@@ -262,6 +341,103 @@ public class FmRadio extends Activity
                 mProgramTypeTextView.setText(FmUtils.getPTYName(this, pty));
             else
                 mProgramTypeTextView.setText("");
+        }
+    }
+
+    private void asyncCheckAndEnableRadio() {
+        Log.d(LOG_TAG, "asyncCheckAndEnableRadio");
+
+        // Save the initial state of the BT adapter
+        mBluetoothEnabled = BluetoothAdapter.getDefaultAdapter().isEnabled();
+        mInitialBtState  = mBluetoothEnabled;
+
+        if (mBluetoothEnabled) {
+            mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+        }
+        else {
+            // Enable the BT adapter
+            BluetoothAdapter.getDefaultAdapter().enable();
+
+            AsyncTask<Void, Void, Boolean> task = new AsyncTask<Void, Void, Boolean>() {
+                @Override
+                protected void onPreExecute() {
+                    if (mBluetoothStartingDialog != null) {
+                        mBluetoothStartingDialog.dismiss();
+                        mBluetoothStartingDialog = null;
+                    }
+                    mBluetoothStartingDialog = ProgressDialog.show(FmRadio.this, null, getString(R.string.init_FM), true, false);
+                    super.onPreExecute();
+                }
+
+                @Override
+                protected Boolean doInBackground(Void... params) {
+                    int n = 0;
+                    try {
+                        while (!mBluetoothEnabled && n < 30) {
+                            Thread.sleep(1000);
+                            ++n;
+                        }
+                    } catch (InterruptedException e) {
+                    } finally {
+                        return true;
+                    }
+                }
+
+                @Override
+                protected void onPostExecute(Boolean result) {
+                    if (mBluetoothStartingDialog != null) {
+                        mBluetoothStartingDialog.dismiss();
+                        mBluetoothStartingDialog = null;
+                    }
+                    if (mBluetoothEnabled){
+                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    }
+                    else {
+                        Toast toast = Toast.makeText(FmRadio.this, getString(R.string.need_bluetooth), Toast.LENGTH_LONG);
+                        toast.setGravity(Gravity.TOP | Gravity.CENTER, 0, 240);
+                        toast.show();
+                    }
+                    super.onPostExecute(result);
+                }
+            };
+            task.execute();
+        }
+    }
+
+    private void toggleRadioOffBluetoothExitBehaviour() {
+        Log.d(LOG_TAG, "toggleRadioOffBluetoothBehavior");
+
+        // Check if the BT adapter is currently enabled
+        if (BluetoothAdapter.getDefaultAdapter().isEnabled()) {
+            switch (mBluetoothExitBehaviour) {
+                case 0:
+                    Log.d(LOG_TAG, "toggleRadioOffBluetoothBehavior: Preference is to leave BT "+
+                                  "adapter on so not disabling");
+                    break;
+                case 1: // Restore initial BT state
+                    if (!mInitialBtState) {
+                        BluetoothAdapter.getDefaultAdapter().disable();
+                    }
+                    break;
+
+                case 2: // Prompt for action
+                    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                    builder.setMessage(R.string.prompt_disable_bt)
+                    .setPositiveButton(R.string.prompt_yes, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            BluetoothAdapter.getDefaultAdapter().disable();
+                        }})
+                    .setNegativeButton(R.string.prompt_no, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            // Do nothing
+                        }})
+                    .show();
+                    break;
+
+                case 3: // Always disable bluetooth
+                    BluetoothAdapter.getDefaultAdapter().disable();
+                    break;
+            }
         }
     }
 
@@ -437,6 +613,36 @@ public class FmRadio extends Activity
             subMenu.getItem(mSelectedOutput).setChecked(true);
         }
 
+
+        // Create and populate the bluetooth selection menu if BT supported
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            // BT_EXIT_BEHAVIOUR
+            subMenu = menu.addSubMenu(BASE_OPTION_MENU, BT_EXIT_BEHAVIOUR, Menu.NONE,
+                R.string.bt_exit_behaviour);
+            subMenu.setIcon(android.R.drawable.ic_menu_mapmode);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_DONOTHING, Menu.NONE,
+                R.string.bt_exit_behaviour_donothing);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_RESTOREINITIALBTSTATE, Menu.NONE,
+                R.string.bt_exit_behaviour_restoreinitialbtstate);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_PROMPT, Menu.NONE,
+                R.string.bt_exit_behaviour_prompt);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_ALWAYSDISABLE, Menu.NONE,
+                R.string.bt_exit_behaviour_alwaysdisable);
+            subMenu.setGroupCheckable(BT_EXIT_BEHAVIOUR_SELECTION_MENU, true, true);
+            subMenu.getItem(mBluetoothExitBehaviour).setChecked(true);
+
+            // HEADSET_EXIT_BEHAVIOUR
+            subMenu = menu.addSubMenu(BASE_OPTION_MENU, HEADSET_EXIT_BEHAVIOUR, Menu.NONE,
+                R.string.headset_exit_behaviour);
+            subMenu.setIcon(android.R.drawable.ic_menu_mapmode);
+            subMenu.add(HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU, HEADSET_EXIT_BEHAVIOUR_OFF, Menu.NONE,
+                R.string.headset_exit_behaviour_off);
+            subMenu.add(HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU, HEADSET_EXIT_BEHAVIOUR_ON, Menu.NONE,
+                R.string.headset_exit_behaviour_on);
+            subMenu.setGroupCheckable(HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU, true, true);
+            subMenu.getItem(mHeadsetBehaviour).setChecked(true);
+        }
+
         // Create the station select menu
         subMenu = menu.addSubMenu(BASE_OPTION_MENU, STATION_SELECT, Menu.NONE,
                 R.string.station_select);
@@ -495,6 +701,54 @@ public class FmRadio extends Activity
 
             case LOUDSPEAKER_SELECTION_MENU:
                 mSelectedOutput = (item.getItemId() == OUTPUT_HEADSET) ? 0 : 1;
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.stopRadio();
+                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                }});
+                break;
+
+            case BT_EXIT_BEHAVIOUR_SELECTION_MENU:
+                switch (item.getItemId()) {
+                    case BT_EXIT_BEHAVIOUR_DONOTHING:
+                        mBluetoothExitBehaviour = 0;
+                        item.setChecked(true);
+                        break;
+                    case BT_EXIT_BEHAVIOUR_RESTOREINITIALBTSTATE:
+                        mBluetoothExitBehaviour = 1;
+                        item.setChecked(true);
+                        break;
+                    case BT_EXIT_BEHAVIOUR_PROMPT:
+                        mBluetoothExitBehaviour = 2;
+                        item.setChecked(true);
+                        break;
+                    case BT_EXIT_BEHAVIOUR_ALWAYSDISABLE:
+                        mBluetoothExitBehaviour = 3;
+                        item.setChecked(true);
+                        break;
+                    default:
+                        break;
+
+                }
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.stopRadio();
+                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                }});
+                break;
+
+            case HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU:
+                switch (item.getItemId()) {
+                    case HEADSET_EXIT_BEHAVIOUR_OFF:
+                        mHeadsetBehaviour = 0;
+                        item.setChecked(true);
+                        break;
+                    case HEADSET_EXIT_BEHAVIOUR_ON:
+                        mHeadsetBehaviour = 1;
+                        item.setChecked(true);
+                        break;
+                    default:
+                        break;
+
+                }
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.stopRadio();
                     mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
