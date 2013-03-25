@@ -20,6 +20,7 @@ package com.cyanogenmod.effem;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.os.*;
@@ -44,6 +45,7 @@ import android.graphics.Typeface;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.json.*;
 
 public class FmRadio extends Activity
@@ -56,17 +58,31 @@ public class FmRadio extends Activity
     private static final int BASE_OPTION_MENU = 0;
     private static final int BAND_SELECTION_MENU = 1;
     private static final int LOUDSPEAKER_SELECTION_MENU = 2;
-    private static final int STATION_SELECTION_MENU = 3;
+    private static final int BT_EXIT_BEHAVIOUR_SELECTION_MENU = 3;
+    private static final int HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU = 4;
+    private static final int STATION_SELECTION_MENU = 5;
 
     public static final int FM_BAND = Menu.FIRST;
     public static final int BAND_US = Menu.FIRST + 1;
     public static final int BAND_EU = Menu.FIRST + 2;
     public static final int BAND_JAPAN = Menu.FIRST + 3;
     public static final int BAND_CHINA = Menu.FIRST + 4;
+
     public static final int OUTPUT_SOUND = Menu.FIRST + 5;
     public static final int OUTPUT_HEADSET = Menu.FIRST + 6;
     public static final int OUTPUT_SPEAKER = Menu.FIRST + 7;
-    public static final int STATION_SELECT = Menu.FIRST + 8;
+
+    public static final int BT_EXIT_BEHAVIOUR = Menu.FIRST + 8;
+    public static final int BT_EXIT_BEHAVIOUR_DONOTHING = Menu.FIRST + 9;
+    public static final int BT_EXIT_BEHAVIOUR_RESTOREINITIALBTSTATE = Menu.FIRST + 10;
+    public static final int BT_EXIT_BEHAVIOUR_PROMPT = Menu.FIRST + 11;
+    public static final int BT_EXIT_BEHAVIOUR_ALWAYSDISABLE = Menu.FIRST + 12;
+
+    public static final int HEADSET_EXIT_BEHAVIOUR = Menu.FIRST + 13;
+    public static final int HEADSET_EXIT_BEHAVIOUR_OFF = Menu.FIRST + 14;
+    public static final int HEADSET_EXIT_BEHAVIOUR_ON = Menu.FIRST + 15;
+
+    public static final int STATION_SELECT = Menu.FIRST + 16;
     public static final int STATION_SELECT_MENU_ITEMS = STATION_SELECT + 1;
 
     // Application context
@@ -83,9 +99,13 @@ public class FmRadio extends Activity
     private Handler mWorkerHandler;
     private FmRadioService mService;
     private int mCurrentFrequency;
-    private boolean mFirstStart = true;
+    private AtomicInteger mFirstStart = new AtomicInteger(1);
     private int mSelectedBand;
     private int mSelectedOutput;
+
+    // BT
+    private int mBluetoothExitBehaviour = 0;
+    private int mHeadsetBehaviour = 0;
 
     // Array of the available stations in MHz
     private ArrayAdapter<MenuTuple> mMenuAdapter;
@@ -107,6 +127,10 @@ public class FmRadio extends Activity
         mCurrentFrequency = settings.getInt("currentFrequency", 0);
         if (context.getResources().getBoolean(R.bool.speaker_supported)) {
             mSelectedOutput = settings.getInt("selectedOutput", 0) > 0 ? 1 : 0;
+        }
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            mBluetoothExitBehaviour = settings.getInt("bluetoothExitBehaviour", 0);
+            mHeadsetBehaviour = settings.getInt("headsetBehaviour", 0);
         }
 
         // misc setup
@@ -139,14 +163,19 @@ public class FmRadio extends Activity
     @Override
     public void onServiceConnected(ComponentName component, IBinder binder) {
         mService = ((FmRadioService.LocalBinder)binder).getService();
+        mService.setFmBand(mSelectedBand);
         // start radio on initial start
         mWorkerHandler.post(new Runnable() { public void run() {
-                if (mFirstStart)
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+            if (context.getResources().getBoolean(R.bool.require_bt)) {
+                mService.asyncCheckAndEnableRadio(FmRadio.this, mFirstStart);
+            } else {
+                if (mFirstStart.get() == 1)
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
+                mFirstStart.set(0);
                 mService.resumeCallbacks();
                 mService.setCallbacks(FmRadio.this);
-                }});
-        mFirstStart = false;
+            }
+        }});
     }
 
     @Override
@@ -167,7 +196,7 @@ public class FmRadio extends Activity
         mService.suspendCallbacks();
 
         // if no playback is going on, the service can exit
-        if (mService.isStarted() == false)
+        if (!mService.isStarted())
             stopService(new Intent(this, FmRadioService.class));
 
         // unbind from service
@@ -190,6 +219,10 @@ public class FmRadio extends Activity
         editor.putInt("currentFrequency", mCurrentFrequency);
         if (context.getResources().getBoolean(R.bool.speaker_supported)) {
             editor.putInt("selectedOutput", mSelectedOutput);
+        }
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            editor.putInt("bluetoothExitBehaviour", mBluetoothExitBehaviour);
+            editor.putInt("headsetBehaviour", mHeadsetBehaviour);
         }
         try {
             JSONObject conf = new JSONObject();
@@ -323,7 +356,7 @@ public class FmRadio extends Activity
         scanUp.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
                     if (mService.isStarted())
                         mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
                 }});
@@ -334,7 +367,7 @@ public class FmRadio extends Activity
         scanDown.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
                     if (mService.isStarted())
                         mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
                 }});
@@ -348,7 +381,7 @@ public class FmRadio extends Activity
                     mService.stopRadio();
                 else {
                     mWorkerHandler.post(new Runnable() { public void run() {
-                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                        mService.startRadio(mCurrentFrequency, mSelectedOutput);
                     }});
                 }
             }
@@ -437,6 +470,36 @@ public class FmRadio extends Activity
             subMenu.getItem(mSelectedOutput).setChecked(true);
         }
 
+
+        // Create and populate the bluetooth selection menu if BT supported
+        if (context.getResources().getBoolean(R.bool.require_bt)) {
+            // BT_EXIT_BEHAVIOUR
+            subMenu = menu.addSubMenu(BASE_OPTION_MENU, BT_EXIT_BEHAVIOUR, Menu.NONE,
+                R.string.bt_exit_behaviour);
+            subMenu.setIcon(android.R.drawable.ic_menu_mapmode);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_DONOTHING, Menu.NONE,
+                R.string.bt_exit_behaviour_donothing);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_RESTOREINITIALBTSTATE, Menu.NONE,
+                R.string.bt_exit_behaviour_restoreinitialbtstate);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_PROMPT, Menu.NONE,
+                R.string.bt_exit_behaviour_prompt);
+            subMenu.add(BT_EXIT_BEHAVIOUR_SELECTION_MENU, BT_EXIT_BEHAVIOUR_ALWAYSDISABLE, Menu.NONE,
+                R.string.bt_exit_behaviour_alwaysdisable);
+            subMenu.setGroupCheckable(BT_EXIT_BEHAVIOUR_SELECTION_MENU, true, true);
+            subMenu.getItem(mBluetoothExitBehaviour).setChecked(true);
+
+            // HEADSET_EXIT_BEHAVIOUR
+            subMenu = menu.addSubMenu(BASE_OPTION_MENU, HEADSET_EXIT_BEHAVIOUR, Menu.NONE,
+                R.string.headset_exit_behaviour);
+            subMenu.setIcon(android.R.drawable.ic_menu_mapmode);
+            subMenu.add(HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU, HEADSET_EXIT_BEHAVIOUR_OFF, Menu.NONE,
+                R.string.headset_exit_behaviour_off);
+            subMenu.add(HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU, HEADSET_EXIT_BEHAVIOUR_ON, Menu.NONE,
+                R.string.headset_exit_behaviour_on);
+            subMenu.setGroupCheckable(HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU, true, true);
+            subMenu.getItem(mHeadsetBehaviour).setChecked(true);
+        }
+
         // Create the station select menu
         subMenu = menu.addSubMenu(BASE_OPTION_MENU, STATION_SELECT, Menu.NONE,
                 R.string.station_select);
@@ -489,7 +552,8 @@ public class FmRadio extends Activity
                 }
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.stopRadio();
-                    mService.startRadio(mSelectedBand, 0, mSelectedOutput);
+                    mService.setFmBand(mSelectedBand);
+                    mService.startRadio(0, mSelectedOutput);
                 }});
                 break;
 
@@ -497,7 +561,53 @@ public class FmRadio extends Activity
                 mSelectedOutput = (item.getItemId() == OUTPUT_HEADSET) ? 0 : 1;
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.stopRadio();
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
+                }});
+                break;
+
+            case BT_EXIT_BEHAVIOUR_SELECTION_MENU:
+                switch (item.getItemId()) {
+                    case BT_EXIT_BEHAVIOUR_DONOTHING:
+                        mBluetoothExitBehaviour = 0;
+                        item.setChecked(true);
+                        break;
+                    case BT_EXIT_BEHAVIOUR_RESTOREINITIALBTSTATE:
+                        mBluetoothExitBehaviour = 1;
+                        item.setChecked(true);
+                        break;
+                    case BT_EXIT_BEHAVIOUR_PROMPT:
+                        mBluetoothExitBehaviour = 2;
+                        item.setChecked(true);
+                        break;
+                    case BT_EXIT_BEHAVIOUR_ALWAYSDISABLE:
+                        mBluetoothExitBehaviour = 3;
+                        item.setChecked(true);
+                        break;
+                    default:
+                        break;
+
+                }
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.setExitBehaviours(mBluetoothExitBehaviour, mHeadsetBehaviour);
+                }});
+                break;
+
+            case HEADSET_EXIT_BEHAVIOUR_SELECTION_MENU:
+                switch (item.getItemId()) {
+                    case HEADSET_EXIT_BEHAVIOUR_OFF:
+                        mHeadsetBehaviour = 0;
+                        item.setChecked(true);
+                        break;
+                    case HEADSET_EXIT_BEHAVIOUR_ON:
+                        mHeadsetBehaviour = 1;
+                        item.setChecked(true);
+                        break;
+                    default:
+                        break;
+
+                }
+                mWorkerHandler.post(new Runnable() { public void run() {
+                    mService.setExitBehaviours(mBluetoothExitBehaviour, mHeadsetBehaviour);
                 }});
                 break;
 
@@ -505,7 +615,7 @@ public class FmRadio extends Activity
                 final int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
                 mWorkerHandler.post(new Runnable() { public void run() {
                     if (!mService.isStarted())
-                        mService.startRadio(mSelectedBand, freq, mSelectedOutput);
+                        mService.startRadio(freq, mSelectedOutput);
                     else
                         mService.changeFrequency(FmRadioService.SEEK_ABSOLUTE, freq);
                 }});

@@ -17,26 +17,35 @@
 
 package com.cyanogenmod.effem;
 
+import java.io.IOException;
+
+import android.app.AlertDialog;
+import android.app.Notification.Builder;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.ProgressDialog;
+import android.app.Service;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.BroadcastReceiver;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.media.AudioSystem;
 import android.media.MediaPlayer;
 import android.media.AudioManager;
 import android.media.AudioManager.OnAudioFocusChangeListener;
 import android.os.*;
 import android.util.Log;
 import android.widget.Toast;
+import android.view.Gravity;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.stericsson.hardware.fm.FmBand;
 import com.stericsson.hardware.fm.FmReceiver;
-import android.media.AudioSystem;
-import android.app.Notification.Builder;
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.Service;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.BroadcastReceiver;
-import java.io.IOException;
 
 public class FmRadioService extends Service
         implements AudioManager.OnAudioFocusChangeListener {
@@ -68,6 +77,12 @@ public class FmRadioService extends Service
     private FmReceiver.OnRDSDataFoundListener mReceiverRdsDataFoundListener;
     private FmReceiver.OnStartedListener mReceiverStartedListener;
     private BroadcastReceiver mHeadsetReceiver;
+    private BroadcastReceiver mBluetoothReceiver;
+    private boolean mBluetoothEnabled = false;
+    private boolean mInitialBtState = false;
+    private ProgressDialog mBluetoothStartingDialog;
+    private int mBluetoothExitBehaviour = 0;
+    private int mHeadsetBehaviour = 0;
 
     private int mCurrentFrequency;
     private int mAudioOutput = 0;
@@ -122,11 +137,12 @@ public class FmRadioService extends Service
             public void onReceive(Context ctx, Intent intent) {
                 int state = intent.getIntExtra("state", -1);
                 Log.i(LOG_TAG, "headset state is " + state);
-                mHeadsetConnected = state == 1;
+                mHeadsetConnected = (state == 1);
 
                 // stop radio if headset disconnected
                 if (mHeadsetConnected == false && isStarted()) {
                     Log.i(LOG_TAG, "stopping receiver");
+
                     if (mCallbacksEnabled == false) {
                         Log.i(LOG_TAG, "nothing to do, stopping service");
                         stopSelf();
@@ -134,6 +150,11 @@ public class FmRadioService extends Service
                         // enter special state that allows the user to start up
                         // the activity again from the notification area
                         //startForeground(PLAY_NOTIFICATION, mNotificationInstance);
+                        // Run headset behaviour if enabled
+                        if (mHeadsetBehaviour > 0) {
+                            toggleRadioOffBluetoothExitBehaviour();
+                        }
+
                     } else {
                         updateReceiverState(false);
                     }
@@ -141,6 +162,25 @@ public class FmRadioService extends Service
             }
         };
         registerReceiver(mHeadsetReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
+
+        // BT
+        if (getResources().getBoolean(R.bool.require_bt)) {
+            mBluetoothReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String action = intent.getAction();
+                    if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                        int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                        mBluetoothEnabled = (state == BluetoothAdapter.STATE_ON);
+                        if (!mBluetoothEnabled) {
+                            // Bluetooth is disabled so we should turn off FM too.
+                            stopRadio();
+                        }
+                    }
+                }
+            };
+            registerReceiver(mBluetoothReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+        }
     }
 
     @Override
@@ -162,9 +202,20 @@ public class FmRadioService extends Service
 
     @Override
     public void onDestroy() {
+
+        // Toggle BT on/off depending on value in preferences
+        if (getResources().getBoolean(R.bool.require_bt)) {
+            toggleRadioOffBluetoothExitBehaviour();
+        }
+
         unregisterReceiver(mHeadsetReceiver);
+
+        if (mBluetoothReceiver != null)
+            unregisterReceiver(mBluetoothReceiver);
+
         unregisterReceiverCallbacks();
         updateReceiverState(false);
+
         super.onDestroy();
     }
 
@@ -266,6 +317,112 @@ public class FmRadioService extends Service
         mFmReceiver.removeOnRDSDataFoundListener(mReceiverRdsDataFoundListener);
 
         mCallbacksEnabled = false;
+    }
+
+    public void asyncCheckAndEnableRadio(final FmRadio thisFmRadio, final AtomicInteger mFirstStart) {
+        Log.d(LOG_TAG, "asyncCheckAndEnableRadio");
+
+        // Save the initial state of the BT adapter
+        mBluetoothEnabled = BluetoothAdapter.getDefaultAdapter().isEnabled();
+        mInitialBtState  = mBluetoothEnabled;
+
+        if (mBluetoothEnabled) {
+            if (mFirstStart.get() == 1)
+                startRadio(mCurrentFrequency, mAudioOutput);
+            mFirstStart.set(0);
+            resumeCallbacks();
+            setCallbacks(thisFmRadio);
+        }
+        else {
+            // Enable the BT adapter
+            BluetoothAdapter.getDefaultAdapter().enable();
+
+            AsyncTask<Void, Void, Boolean> task = new AsyncTask<Void, Void, Boolean>() {
+                @Override
+                protected void onPreExecute() {
+                    if (mBluetoothStartingDialog != null) {
+                        mBluetoothStartingDialog.dismiss();
+                        mBluetoothStartingDialog = null;
+                    }
+                    mBluetoothStartingDialog = ProgressDialog.show(thisFmRadio, null, getString(R.string.init_FM), true, false);
+                    super.onPreExecute();
+                }
+
+                @Override
+                protected Boolean doInBackground(Void... params) {
+                    int n = 0;
+                    try {
+                        while (!mBluetoothEnabled && n < 30) {
+                            Thread.sleep(1000);
+                            ++n;
+                        }
+                    } catch (InterruptedException e) {
+                    } finally {
+                        return true;
+                    }
+                }
+
+                @Override
+                protected void onPostExecute(Boolean result) {
+                    if (mBluetoothStartingDialog != null) {
+                        mBluetoothStartingDialog.dismiss();
+                        mBluetoothStartingDialog = null;
+                    }
+
+                    if (mBluetoothEnabled){
+                        if (mFirstStart.get() == 1)
+                            startRadio(mCurrentFrequency, mAudioOutput);
+                        mFirstStart.set(0);
+                        resumeCallbacks();
+                        setCallbacks(thisFmRadio);
+                    }
+                    else {
+                        Toast toast = Toast.makeText(thisFmRadio, getString(R.string.need_bluetooth), Toast.LENGTH_LONG);
+                        toast.setGravity(Gravity.TOP | Gravity.CENTER, 0, 240);
+                        toast.show();
+                    }
+                    super.onPostExecute(result);
+                }
+            };
+            task.execute();
+        }
+    }
+
+    private void toggleRadioOffBluetoothExitBehaviour() {
+        Log.d(LOG_TAG, "toggleRadioOffBluetoothBehavior");
+
+        // Check if the BT adapter is currently enabled
+        if (BluetoothAdapter.getDefaultAdapter().isEnabled()) {
+            switch (mBluetoothExitBehaviour) {
+                case 0:
+                    Log.d(LOG_TAG, "toggleRadioOffBluetoothBehavior: Preference is to leave BT "+
+                                  "adapter on so not disabling");
+                    break;
+                case 1: // Restore initial BT state
+                    if (!mInitialBtState) {
+                        BluetoothAdapter.getDefaultAdapter().disable();
+                    }
+                    break;
+
+                case 2: // Prompt for action
+                    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                    builder.setMessage(R.string.prompt_disable_bt)
+                    .setPositiveButton(R.string.prompt_yes, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            BluetoothAdapter.getDefaultAdapter().disable();
+                        }})
+                    .setNegativeButton(R.string.prompt_no, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            // Do nothing
+                        }})
+                    .show();
+                    break;
+
+                case 3: // Always disable bluetooth
+                    BluetoothAdapter.getDefaultAdapter().disable();
+                    break;
+            }
+        }
     }
 
     /**
@@ -487,14 +644,13 @@ public class FmRadioService extends Service
     }
 
     /**
-     * Start radio with given band and frequency
+     * Start radio with given frequency
      *
-     * @param band FmBand constant
      * @param frequency frequency in Khz
      * @param output headset/speaker
      * @return success
      */
-    public boolean startRadio(int band, int frequency, int output) {
+    public boolean startRadio(int frequency, int output) {
         Log.v(LOG_TAG, "startRadio");
 
         if (mHeadsetConnected == false) {
@@ -505,7 +661,6 @@ public class FmRadioService extends Service
 
         mCurrentFrequency = frequency;
         mAudioOutput = output;
-        mFmBand = new FmBand(band);
         updateReceiverState(true);
         return true;
     }
@@ -637,6 +792,10 @@ public class FmRadioService extends Service
         return mFmBand.getChannelOffset();
     }
 
+    public void setFmBand(int band) {
+        mFmBand = new FmBand(band);
+    }
+
     /**
      * Get current audio output device
      *
@@ -647,5 +806,10 @@ public class FmRadioService extends Service
             case AUDIO_SPEAKER: return AudioSystem.FORCE_SPEAKER;
             default:            return AudioSystem.FORCE_NONE;
         }
+    }
+
+    public void setExitBehaviours(int bluetoothExitBehaviour, int headsetBehaviour) {
+        mBluetoothExitBehaviour = bluetoothExitBehaviour;
+        mHeadsetBehaviour = headsetBehaviour;
     }
 }
