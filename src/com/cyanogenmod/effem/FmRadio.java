@@ -18,19 +18,13 @@
 package com.cyanogenmod.effem;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
-import android.bluetooth.BluetoothAdapter;
-import android.content.BroadcastReceiver;
 import android.content.pm.ActivityInfo;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.os.*;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
@@ -51,6 +45,7 @@ import android.graphics.Typeface;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.json.*;
 
 public class FmRadio extends Activity
@@ -104,33 +99,13 @@ public class FmRadio extends Activity
     private Handler mWorkerHandler;
     private FmRadioService mService;
     private int mCurrentFrequency;
-    private boolean mFirstStart = true;
+    private AtomicInteger mFirstStart = new AtomicInteger(1);
     private int mSelectedBand;
     private int mSelectedOutput;
 
     // BT
     private int mBluetoothExitBehaviour = 0;
     private int mHeadsetBehaviour = 0;
-    private boolean mBluetoothEnabled = false;
-    private boolean mInitialBtState = false;
-    private ProgressDialog mBluetoothStartingDialog;
-
-    private BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                mBluetoothEnabled = (state == BluetoothAdapter.STATE_ON);
-                if (!mBluetoothEnabled) {
-                    // Bluetooth is disabled so we should turn off FM too.
-                    if (mService != null) {
-                        mService.stopRadio();
-                    }
-                }
-            }
-        }
-    };
 
     // Array of the available stations in MHz
     private ArrayAdapter<MenuTuple> mMenuAdapter;
@@ -162,13 +137,6 @@ public class FmRadio extends Activity
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
-        // BT
-        if (getResources().getBoolean(R.bool.require_bt)) {
-            IntentFilter filter = new IntentFilter();
-            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-            registerReceiver(mIntentReceiver, filter);
-        }
-
         // worker thread for async execution of FM stuff
         mWorker = new HandlerThread("EffemWorker");
         mWorker.start();
@@ -195,27 +163,24 @@ public class FmRadio extends Activity
     @Override
     public void onServiceConnected(ComponentName component, IBinder binder) {
         mService = ((FmRadioService.LocalBinder)binder).getService();
+        mService.setFmBand(mSelectedBand);
         // start radio on initial start
         mWorkerHandler.post(new Runnable() { public void run() {
-		if (context.getResources().getBoolean(R.bool.require_bt)) {
-			asyncCheckAndEnableRadio();
-		} else {
-                    if (mFirstStart)
-                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
-                }
+            if (context.getResources().getBoolean(R.bool.require_bt)) {
+                mService.asyncCheckAndEnableRadio(FmRadio.this, mFirstStart);
+            } else {
+                if (mFirstStart.get() == 1)
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
+                mFirstStart.set(0);
                 mService.resumeCallbacks();
                 mService.setCallbacks(FmRadio.this);
-                }});
-        mFirstStart = false;
+            }
+        }});
     }
 
     @Override
     public void onServiceDisconnected(ComponentName component) {
         mService = null;
-
-        if (mHeadsetBehaviour > 0) {
-            toggleRadioOffBluetoothExitBehaviour();
-        }
     }
 
     /**
@@ -270,17 +235,6 @@ public class FmRadio extends Activity
             Log.e(LOG_TAG, "Failed to save station list");
         }
         editor.commit();
-
-        // Toggle BT on/off depending on value in preferences
-        if (context.getResources().getBoolean(R.bool.require_bt)) {
-            toggleRadioOffBluetoothExitBehaviour();
-        }
-
-        // Unregister BT receiver
-        if (mIntentReceiver != null && getResources().getBoolean(R.bool.require_bt)) {
-            unregisterReceiver(mIntentReceiver);
-            mIntentReceiver = null;
-        }
     }
 
     @Override
@@ -344,103 +298,6 @@ public class FmRadio extends Activity
         }
     }
 
-    private void asyncCheckAndEnableRadio() {
-        Log.d(LOG_TAG, "asyncCheckAndEnableRadio");
-
-        // Save the initial state of the BT adapter
-        mBluetoothEnabled = BluetoothAdapter.getDefaultAdapter().isEnabled();
-        mInitialBtState  = mBluetoothEnabled;
-
-        if (mBluetoothEnabled) {
-            mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
-        }
-        else {
-            // Enable the BT adapter
-            BluetoothAdapter.getDefaultAdapter().enable();
-
-            AsyncTask<Void, Void, Boolean> task = new AsyncTask<Void, Void, Boolean>() {
-                @Override
-                protected void onPreExecute() {
-                    if (mBluetoothStartingDialog != null) {
-                        mBluetoothStartingDialog.dismiss();
-                        mBluetoothStartingDialog = null;
-                    }
-                    mBluetoothStartingDialog = ProgressDialog.show(FmRadio.this, null, getString(R.string.init_FM), true, false);
-                    super.onPreExecute();
-                }
-
-                @Override
-                protected Boolean doInBackground(Void... params) {
-                    int n = 0;
-                    try {
-                        while (!mBluetoothEnabled && n < 30) {
-                            Thread.sleep(1000);
-                            ++n;
-                        }
-                    } catch (InterruptedException e) {
-                    } finally {
-                        return true;
-                    }
-                }
-
-                @Override
-                protected void onPostExecute(Boolean result) {
-                    if (mBluetoothStartingDialog != null) {
-                        mBluetoothStartingDialog.dismiss();
-                        mBluetoothStartingDialog = null;
-                    }
-                    if (mBluetoothEnabled){
-                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
-                    }
-                    else {
-                        Toast toast = Toast.makeText(FmRadio.this, getString(R.string.need_bluetooth), Toast.LENGTH_LONG);
-                        toast.setGravity(Gravity.TOP | Gravity.CENTER, 0, 240);
-                        toast.show();
-                    }
-                    super.onPostExecute(result);
-                }
-            };
-            task.execute();
-        }
-    }
-
-    private void toggleRadioOffBluetoothExitBehaviour() {
-        Log.d(LOG_TAG, "toggleRadioOffBluetoothBehavior");
-
-        // Check if the BT adapter is currently enabled
-        if (BluetoothAdapter.getDefaultAdapter().isEnabled()) {
-            switch (mBluetoothExitBehaviour) {
-                case 0:
-                    Log.d(LOG_TAG, "toggleRadioOffBluetoothBehavior: Preference is to leave BT "+
-                                  "adapter on so not disabling");
-                    break;
-                case 1: // Restore initial BT state
-                    if (!mInitialBtState) {
-                        BluetoothAdapter.getDefaultAdapter().disable();
-                    }
-                    break;
-
-                case 2: // Prompt for action
-                    AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                    builder.setMessage(R.string.prompt_disable_bt)
-                    .setPositiveButton(R.string.prompt_yes, new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int id) {
-                            BluetoothAdapter.getDefaultAdapter().disable();
-                        }})
-                    .setNegativeButton(R.string.prompt_no, new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int id) {
-                            // Do nothing
-                        }})
-                    .show();
-                    break;
-
-                case 3: // Always disable bluetooth
-                    BluetoothAdapter.getDefaultAdapter().disable();
-                    break;
-            }
-        }
-    }
-
     /**
      * Sets up the buttons and their listeners
      */
@@ -499,7 +356,7 @@ public class FmRadio extends Activity
         scanUp.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
                     if (mService.isStarted())
                         mService.changeFrequency(FmRadioService.SEEK_SCANUP, 0);
                 }});
@@ -510,7 +367,7 @@ public class FmRadio extends Activity
         scanDown.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
                     if (mService.isStarted())
                         mService.changeFrequency(FmRadioService.SEEK_SCANDOWN, 0);
                 }});
@@ -524,7 +381,7 @@ public class FmRadio extends Activity
                     mService.stopRadio();
                 else {
                     mWorkerHandler.post(new Runnable() { public void run() {
-                        mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                        mService.startRadio(mCurrentFrequency, mSelectedOutput);
                     }});
                 }
             }
@@ -695,7 +552,8 @@ public class FmRadio extends Activity
                 }
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.stopRadio();
-                    mService.startRadio(mSelectedBand, 0, mSelectedOutput);
+                    mService.setFmBand(mSelectedBand);
+                    mService.startRadio(0, mSelectedOutput);
                 }});
                 break;
 
@@ -703,7 +561,7 @@ public class FmRadio extends Activity
                 mSelectedOutput = (item.getItemId() == OUTPUT_HEADSET) ? 0 : 1;
                 mWorkerHandler.post(new Runnable() { public void run() {
                     mService.stopRadio();
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.startRadio(mCurrentFrequency, mSelectedOutput);
                 }});
                 break;
 
@@ -730,8 +588,7 @@ public class FmRadio extends Activity
 
                 }
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.stopRadio();
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.setExitBehaviours(mBluetoothExitBehaviour, mHeadsetBehaviour);
                 }});
                 break;
 
@@ -750,8 +607,7 @@ public class FmRadio extends Activity
 
                 }
                 mWorkerHandler.post(new Runnable() { public void run() {
-                    mService.stopRadio();
-                    mService.startRadio(mSelectedBand, mCurrentFrequency, mSelectedOutput);
+                    mService.setExitBehaviours(mBluetoothExitBehaviour, mHeadsetBehaviour);
                 }});
                 break;
 
@@ -759,7 +615,7 @@ public class FmRadio extends Activity
                 final int freq = mMenuAdapter.getItem(getSelectStationMenuItem(item)).frequency;
                 mWorkerHandler.post(new Runnable() { public void run() {
                     if (!mService.isStarted())
-                        mService.startRadio(mSelectedBand, freq, mSelectedOutput);
+                        mService.startRadio(freq, mSelectedOutput);
                     else
                         mService.changeFrequency(FmRadioService.SEEK_ABSOLUTE, freq);
                 }});
